@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PMS — Auto Grid + Free Move/Resize/Zoom + Quotes (Fixed)</title>
+
+  <!-- Libraries -->
+  <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Roboto:wght@400;700&family=Lobster&family=Pacifico&family=Oswald:wght@400;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+
+  <style>
+    :root{
+      --sidebar-w: 400px;
+      --card-bg: rgba(255,255,255,0.9);
+      --card-radius: 14px;
+      --card-shadow: 0 10px 30px rgba(0,0,0,0.08);
+      --gap: 10px;             
+      --top-offset: 260px;     
+      --layout-h: 760px;       
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:Poppins,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+      color:#1a1a1a;
+      background:#faf7ff;
+    }
+
+    /* ===== Left Sidebar ===== */
+    .sidebar{
+  position: fixed;
+  top: 0;
+  right: 0;                /* moved from left → right ✅ */
+  width: var(--sidebar-w);
+  height: 100vh;
+  padding: 18px 16px;
+  overflow-y: auto;
+  background: linear-gradient(180deg, #7b2cbf 0%, #b5179e 40%, #f72585 100%);
+  color: #fff;
+ box-shadow: -6px 0 30px rgba(0,0,0,0.2);  /* shadow reversed */
+    }
+    .brand{display:flex;align-items:center;gap:12px; padding:8px 10px; margin-bottom:10px;}
+    .brand .dot{width:14px;height:14px;border-radius:50%; background:#fff; box-shadow:0 0 0 6px rgba(255,255,255,0.2);}
+    .brand h1{font-size:18px;font-weight:700;margin:0;letter-spacing:.3px}
+    .section{background:var(--card-bg); border-radius:var(--card-radius); box-shadow:var(--card-shadow); padding:12px; margin:12px 0; color:#111}
+    .section h3{display:flex;align-items:center;gap:8px; font-size:15px;margin:0 0 8px 0;color:#222}
+    .row{display:flex;gap:8px;flex-wrap:wrap}
+    .row > *{flex:1 1 48%}
+    .row.full > *{flex:1 1 100%}
+    label{font-size:12px;color:#333}
+    input[type="text"], input[type="number"], input[type="date"], select, input[type="color"]{
+      width:100%; padding:8px 10px; border:1px solid #e7e4ef; border-radius:10px; outline:none; background:#fff;
+    }
+    button{border:none; padding:9px 12px; border-radius:10px; cursor:pointer; font-weight:600; background:#ece7ff}
+    button.primary{ background:#4cc9f0; color:#05263a; }
+    button.danger{ background:#ffadad; color:#5a0000; }
+    button.ghost{ background:#f2f2f8; }
+    .hint{font-size:12px;color:#444}
+
+    /* ===== Main Area ===== */
+    .main {
+  margin-right: calc(var(--sidebar-w) + 24px);  /* sidebar is on right ✅ */
+  height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #faf7ff;
+  overflow: hidden;
+    }
+
+    .poster-container {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .toolbar{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:8px; }
+
+    /* ===== Poster (1080 x 1080) ===== */
+    #poster {
+      width: 1080px;
+      height: 1080px;
+      background: #fff;
+      box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+      transform-origin: center center;
+      transition: transform 0.2s ease;
+      position: relative;
+    }
+    #logo { object-fit: contain; margin-bottom: 10px; margin-top: -22px; }
+
+    #title, #branch, #dateText{
+      position:absolute; cursor:move; user-select:none; padding:2px 6px; background:transparent;
+    }
+    #title { font-size:30px; font-weight:700; top:130px; left:50%; transform:translateX(-50%); }
+    #branch{ font-size:22px; top:175px; left:50%; transform:translateX(-50%); }
+    #dateText{ font-size:20px; font-weight:700; top:100px; right:40px; display:none; }
+
+    /* ===== Free-move Image Boxes ===== */
+    .image-box{
+      position:absolute; display:inline-block;
+      border:2px solid #fff;
+      outline: 0;
+      touch-action: none;
+    }
+    .image-box.selected{ outline:1px dashed #00bfff; outline-offset:-1px; }
+    .image-box img{
+      display:block;
+      width:200px;
+      height:auto;
+      user-select:none;
+      pointer-events:none;
+      will-change: transform, filter, box-shadow;
+      transition: transform 0.35s ease, filter 0.35s ease, box-shadow 0.35s ease;
+    }
+    .image-box:hover img{
+      transform: scale(1.08);
+      filter: brightness(1.1);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    }
+    .image-box.selected img{
+      box-shadow: 0 0 0 3px #00bfff, 0 6px 20px rgba(0,0,0,0.3);
+      transform: scale(1.05);
+    }
+    .handle{
+      width:12px; height:12px; background:#00bfff; position:absolute; border-radius:50%; display:none;
+    }
+    .image-box.selected .handle{ display:block; }
+    .handle.tl{ top:-6px; left:-6px; cursor:nwse-resize; }
+    .handle.tr{ top:-6px; right:-6px; cursor:nesw-resize; }
+    .handle.bl{ bottom:-6px; left:-6px; cursor:nesw-resize; }
+    .handle.br{ bottom:-6px; right:-6px; cursor:nwse-resize; }
+
+    .ibtn{
+      z-index:11; position:absolute; top:6px; right:6px;
+      background:#ef476f; color:#fff; border:none; padding:6px 8px; font-size:12px; border-radius:8px; cursor:pointer;
+    }
+    .flip-btn{
+      z-index:10; position:absolute; top:6px; left:6px;
+      background:#4361ee; color:#fff; border:none; border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer;
+    }
+    .crop-btn{
+      z-index:10; position:absolute; bottom:6px; left:6px;
+      background:#118ab2; color:#fff; border:none; border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer;
+    }
+
+    /* ===== Stickers ===== */
+    .sticker{ position:absolute; cursor:move; user-select:none; font-size:64px; }
+    .sticker .sticker-del{ position:absolute; top:-10px; right:-10px; width:22px; height:22px; background:red; color:#fff; border-radius:50%;
+      font-weight:bold; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; }
+    .sticker .sticker-flip{ position:absolute; bottom:-10px; right:-10px; width:22px; height:22px; background:#007bff; color:#fff; border-radius:50%;
+      font-weight:bold; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; }
+
+    /* ===== Crop Modal ===== */
+    #editorModal{ position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.7);
+      display:none; justify-content:center; align-items:center; z-index:1000; }
+    #editorBox{ background:#fff; padding:20px; max-width:80%; max-height:80%; border-radius:12px; }
+    #editorBox img{ max-width:100%; max-height:60vh; }
+
+    /* ===== Frames ===== */
+    .frame-none{ border:none; }
+    .frame-black{ border:5px solid black; }
+    .frame-golden{ border:5px solid gold; }
+    .frame-rounded{ border:5px solid #333; border-radius:25px; }
+    .frame-shadow{ box-shadow:0 0 30px rgba(0,0,0,0.6); }
+    .frame-dotted{ border:5px dotted #444; }
+    .frame-blue{ border:5px solid blue; }
+    .frame-red{ border:5px solid red; }
+    .frame-green{ border:5px solid #28a745; }
+    .frame-custom{ border:5px solid #ff00ff; }
+
+    /* ===== Quotes / Custom Text ===== */
+    .quote-box{
+  position: absolute;
+  min-width: 120px;
+  max-width: 800px;
+  padding: 4px 8px;
+  cursor: move;
+  user-select: none;
+  background: transparent;
+  line-height: 1.3;
+  white-space: normal !important;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  display: block !important;           /* force block instead of inline */
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  transform-origin: left top;          /* important for scaling */
+    }
+    .quote-box.selected{
+      outline: 1px dashed #00bfff;
+      outline-offset: 2px;
+    }
+    .txt-del{
+      position:absolute;
+      top: -10px; right: -10px;
+      width: 22px; height: 22px;
+      background:#ef476f; color:#fff;
+      border-radius: 50%;
+      font-weight: bold; font-size: 13px;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer;
+      transform: translate(50%, -50%);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
+    }
+    .align-group{ display:flex; gap:8px; }
+    .align-btn{
+      flex:1; padding:8px; border-radius:8px; border:none; background:#f2f2f8; display:flex; align-items:center; justify-content:center; cursor:pointer;
+    }
+    .align-btn.active{ background:#4cc9f0; color:#05263a; }
+
+    @media (max-width:1600px){
+      .main{ overflow-x:auto; }
+      #poster{ margin-right:24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== Sidebar ===== -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="dot"></div><h1>PMS</h1>
+    </div>
+
+    <!-- 🎨 Frame -->
+    <div class="section">
+      <h3>🎨 Frame & Border</h3>
+      <div class="row">
+        <div>
+          <label>Style</label>
+          <select id="frameStyle">
+            <option value="frame-none">None</option>
+            <option value="frame-black">Classic Black</option>
+            <option value="frame-golden">Golden</option>
+            <option value="frame-rounded">Rounded</option>
+            <option value="frame-dotted">Dotted</option>
+            <option value="frame-custom">Custom Color</option>
+          </select>
+        </div>
+        <div>
+          <label>Custom Color</label>
+          <input type="color" id="frameColor" value="#000000"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- 🖋️ Text -->
+    <div class="section">
+      <h3>🖋️ Text (Title & Branch)</h3>
+      <div class="row">
+        <div class="full">
+          <label>Event Name</label>
+          <input type="text" id="eventName" placeholder="Enter Event Name" />
+        </div>
+        <div>
+          <label>Event Color</label>
+          <input type="color" id="eventColor" value="#000000" />
+        </div>
+        <div>
+          <label>Event Font</label>
+          <select id="eventFont">
+            <option value="Poppins">Poppins</option>
+            <option value="Roboto">Roboto</option>
+            <option value="Lobster">Lobster</option>
+            <option value="Pacifico">Pacifico</option>
+            <option value="Oswald">Oswald</option>
+            <option value="Playfair Display">Playfair Display</option>
+            <option value="sans-serif">Sans Serif (Default)</option>
+            <option value="serif">Serif</option>
+            <option value="monospace">Monospace</option>
+            <option value="cursive">Cursive</option>
+            <option value="Impact">Impact</option>
+          </select>
+        </div>
+        <div>
+          <label>Event Size</label>
+          <input type="number" id="eventFontSize" value="30" min="10" max="80" />
+        </div>
+      </div>
+      <div class="row">
+        <button class="ghost" data-style="bold"   data-target="title">Title Bold</button>
+        <button class="ghost" data-style="italic" data-target="title">Title Italic</button>
+      </div>
+      <hr style="border:none;border-top:1px solid #eee;margin:12px 0">
+      <div class="row">
+        <div class="full">
+          <label>Branch Name</label>
+          <input type="text" id="branchName" placeholder="Enter Branch Name" />
+        </div>
+        <div>
+          <label>Branch Color</label>
+          <input type="color" id="branchColor" value="#000000" />
+        </div>
+        <div>
+          <label>Branch Font</label>
+          <select id="branchFont">
+            <option value="sans-serif">Sans Serif</option>
+            <option value="serif">Serif</option>
+            <option value="monospace">Monospace</option>
+            <option value="cursive">Cursive</option>
+          </select>
+        </div>
+        <div>
+          <label>Branch Size</label>
+          <input type="number" id="branchFontSize" value="22" min="10" max="60" />
+        </div>
+      </div>
+      <div class="row">
+        <button class="ghost" data-style="bold"   data-target="branch">Branch Bold</button>
+        <button class="ghost" data-style="italic" data-target="branch">Branch Italic</button>
+      </div>
+    </div>
+
+    <!-- 📅 Date -->
+    <div class="section">
+      <h3>📅 Date Settings</h3>
+      <div class="row">
+        <div>
+          <label>Select Date</label>
+          <input type="date" id="datePicker">
+        </div>
+        <div>
+          <label>Color</label>
+          <input type="color" id="dateColor" value="#000000">
+        </div>
+        <div>
+          <label>Font</label>
+          <select id="dateFont">
+            <option value="Poppins">Poppins</option>
+            <option value="Roboto">Roboto</option>
+            <option value="Lobster">Lobster</option>
+            <option value="Pacifico">Pacifico</option>
+            <option value="Oswald">Oswald</option>
+            <option value="Playfair Display">Playfair Display</option>
+            <option value="sans-serif">Sans Serif</option>
+            <option value="serif">Serif</option>
+            <option value="monospace">Monospace</option>
+            <option value="cursive">Cursive</option>
+          </select>
+        </div>
+        <div>
+          <label>Size</label>
+          <input type="number" id="dateFontSize" value="20" min="10" max="80">
+        </div>
+      </div>
+      <div class="row">
+        <button class="ghost" id="dateBoldBtn">Bold</button>
+        <button class="ghost" id="dateItalicBtn">Italic</button>
+        <button class="danger" id="clearDateBtn">Clear Date</button>
+      </div>
+      <div class="hint">Drag the date anywhere on the poster.</div>
+    </div>
+
+    <!-- 🧁 Stickers -->
+    <div class="section">
+      <h3>🧁 Stickers</h3>
+      <div class="row">
+        <button class="ghost" data-emoji="💐">💐</button>
+		<button class="ghost" data-emoji="🏆">🏆</button>
+        <button class="ghost" data-emoji="⭐">⭐</button>
+        <button class="ghost" data-emoji="🎊">🎊</button>
+        <!--<button class="ghost" data-emoji="🎈">🎈</button>-->
+      </div>
+      <div class="row full" style="margin-top:8px">
+        <input type="file" id="stickerUpload" accept="image/*">
+      </div>
+      <div class="hint">Tip: Mouse wheel on sticker to resize</div>
+    </div>
+
+    <!-- 🌈 Background -->
+    <div class="section">
+      <h3>🌈 Background</h3>
+      <div class="row">
+        <div>
+          <label>Solid</label>
+          <input type="color" id="bgColorPicker" value="#ffffff" />
+        </div>
+        <div>
+          <label>Grad From</label>
+          <input type="color" id="grad1" value="#ff7e5f">
+        </div>
+        <div>
+          <label>Grad To</label>
+          <input type="color" id="grad2" value="#feb47b">
+        </div>
+        <div>
+          <label>Direction</label>
+          <select id="gradDir">
+            <option value="to bottom right">↘︎</option>
+            <option value="to bottom">↓</option>
+            <option value="to right">→</option>
+            <option value="to top right">↗︎</option>
+            <option value="to left">←</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <button class="primary" id="applyGradBtn">Apply Gradient</button>
+        <button class="ghost" id="clearGradBtn">Clear</button>
+      </div>
+    </div>
+
+    <!-- 🖼️ Photos & Filters -->
+    <div class="section">
+      <h3>🖼️ Photos & Filters</h3>
+      <div class="row full">
+        <input type="file" accept="image/*" multiple id="imageInput" />
+      </div>
+      <div class="row">
+        <div class="full"><label><b>Filters</b></label></div>
+        <div class="full">Brightness <input type="range" id="brightness" min="50" max="150" value="100"></div>
+        <div class="full">Contrast   <input type="range" id="contrast"  min="50" max="150" value="100"></div>
+      </div>
+      <div class="row">
+        <button class="ghost" id="resetFiltersBtn">Reset Filters</button>
+      </div>
+    </div>
+
+    <!-- 📝 Quotes / Custom Text -->
+    <div class="section">
+      <h3>📝 Quotes / Custom Text</h3>
+      <div class="row">
+        <button class="primary" id="addTextBtn">➕ Add Text</button>
+      </div>
+      <div class="row">
+        <div>
+          <label>Font</label>
+          <select id="qFont">
+            <option value="Poppins">Poppins</option>
+            <option value="Roboto">Roboto</option>
+            <option value="Lobster">Lobster</option>
+            <option value="Pacifico">Pacifico</option>
+            <option value="Oswald">Oswald</option>
+            <option value="Playfair Display">Playfair Display</option>
+            <option value="sans-serif">Sans Serif</option>
+            <option value="serif">Serif</option>
+            <option value="monospace">Monospace</option>
+            <option value="cursive">Cursive</option>
+            <option value="Impact">Impact</option>
+          </select>
+        </div>
+        <div>
+          <label>Size</label>
+          <input type="number" id="qSize" value="28" min="10" max="120" />
+        </div>
+      </div>
+      <div class="row">
+        <div>
+          <label>Color</label>
+          <input type="color" id="qColor" value="#000000" />
+        </div>
+        <div class="row" style="flex:1 1 48%; gap:8px; align-items:end;">
+          <button class="ghost" id="qBoldBtn">Bold</button>
+          <button class="ghost" id="qItalicBtn">Italic</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="full">
+          <label>Alignment</label>
+          <div class="align-group">
+            <button class="align-btn" id="alignLeft" title="Align Left">
+              <svg width="22" height="18" viewBox="0 0 24 24"><rect x="2" y="4" width="14" height="2"/><rect x="2" y="9" width="18" height="2"/><rect x="2" y="14" width="12" height="2"/><rect x="2" y="19" width="20" height="2"/></svg>
+            </button>
+            <button class="align-btn" id="alignCenter" title="Align Center">
+              <svg width="22" height="18" viewBox="0 0 24 24"><rect x="5" y="4" width="14" height="2"/><rect x="3" y="9" width="18" height="2"/><rect x="6" y="14" width="12" height="2"/><rect x="2" y="19" width="20" height="2"/></svg>
+            </button>
+            <button class="align-btn" id="alignRight" title="Align Right">
+              <svg width="22" height="18" viewBox="0 0 24 24"><rect x="8" y="4" width="14" height="2"/><rect x="4" y="9" width="18" height="2"/><rect x="10" y="14" width="12" height="2"/><rect x="2" y="19" width="20" height="2"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <button class="danger" id="delSelectedTextBtn">Delete Selected Text</button>
+      </div>
+      <div class="hint">Tip: Click to select. Double-click to edit. Mouse wheel to zoom text. Enter for new line. Drag to move.</div>
+    </div>
+
+    <!-- 💾 Actions -->
+    <div class="section">
+      <h3>💾 Actions</h3>
+      <div class="row">
+        <button class="primary" id="downloadBtn">Download Poster</button>
+        <button class="ghost" id="shuffleBtn">Shuffle Layout</button>
+        <button class="danger"  id="resetBtn">Reset Poster</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== Main Area ===== -->
+  <main class="main">
+    <div class="toolbar"></div>
+
+    <!-- Poster -->
+    <div class="poster-container" style="background: linear-gradient(135deg, #f8f5ff, #e3e6ff);">
+      <div id="poster" class="frame-none">
+        <img id="logo" src="https://srichaitanyaschoolacademics.com/1" alt="Logo" />
+        <div id="title">Event Name</div>
+        <div id="branch">Branch Name</div>
+        <div id="dateText"></div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Crop Editor Modal -->
+  <div id="editorModal">
+    <div id="editorBox">
+      <img id="cropImage" src=""/>
+      <br/>
+      <button class="primary" id="applyCropBtn">Apply</button>
+      <button class="ghost"   id="closeCropBtn">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+  <script>
+    /* ================== STATE ================== */
+    let cropper = null, currentEditingIndex = -1;
+    const poster = document.getElementById('poster');
+    const title  = document.getElementById('title');
+    const branch = document.getElementById('branch');
+    const dateText = document.getElementById('dateText');
+
+    // Photo objects: { src, x, y, w, h, ar, flipped }
+    let photosArr = []; // max 6
+    let zCounter = 10;  // bring-to-front order
+
+    // Quotes state
+    let currentTextEl = null;
+    const textBoxes = [];
+
+    /* ================== FILTERS ================== */
+    const filterState = { brightness: 100, contrast: 100 };
+    const buildFilterString = () => `brightness(${filterState.brightness}%) contrast(${filterState.contrast}%)`;
+    function applyFiltersToAllImages(){
+      document.querySelectorAll('.image-box img').forEach(img => img.style.filter = buildFilterString());
+    }
+    document.getElementById('brightness').addEventListener('input', e => { filterState.brightness=+e.target.value; applyFiltersToAllImages(); });
+    document.getElementById('contrast').addEventListener('input',  e => { filterState.contrast =+e.target.value; applyFiltersToAllImages(); });
+    document.getElementById('resetFiltersBtn').addEventListener('click', () => {
+      filterState.brightness=100; filterState.contrast=100;
+      document.getElementById('brightness').value=100; document.getElementById('contrast').value=100;
+      applyFiltersToAllImages();
+    });
+
+    /* ================== DRAGGABLE TEXT/DATE/TITLES (Fixed offset) ================== */
+    makeDraggable(title); makeDraggable(branch); makeDraggable(dateText);
+  function makeDraggable(el) {
+  let isDragging = false, offsetX = 0, offsetY = 0;
+
+  el.addEventListener('mousedown', e => {
+    if (el.isContentEditable) return;
+    if (el.style.display === 'none') return;
+    e.preventDefault();
+    isDragging = true;
+
+    const rect = el.getBoundingClientRect();
+    offsetX = e.clientX - rect.left;
+    offsetY = e.clientY - rect.top;
+
+    document.body.style.userSelect = 'none';
+    el.style.zIndex = ++zCounter;
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!isDragging) return;
+
+    const p = poster.getBoundingClientRect();
+
+    // ✅ get current scale factor (compensate for transform scale)
+    const transform = window.getComputedStyle(poster).transform;
+    let scale = 1;
+    if (transform && transform !== 'none') {
+      const match = transform.match(/matrix\(([\d.]+)/);
+      if (match) scale = parseFloat(match[1]);
+    }
+
+    // convert to unscaled coordinate space
+    const x = (e.clientX - p.left - offsetX) / scale;
+    const y = (e.clientY - p.top - offsetY) / scale;
+
+    // clamp to poster boundaries
+    const maxX = 1080 - el.offsetWidth;
+    const maxY = 1080 - el.offsetHeight;
+    el.style.left = Math.min(Math.max(0, x), maxX) + 'px';
+    el.style.top = Math.min(Math.max(0, y), maxY) + 'px';
+    el.style.transform = 'none';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!isDragging) return;
+    isDragging = false;
+    document.body.style.userSelect = 'auto';
+  });
+}
+
+
+    /* ================== TEXT CONTROLS ================== */
+    function toggleStyle(id,type){
+      const el=document.getElementById(id);
+      if(!el || el.style.display==='none') return;
+      if(type=="bold")   el.style.fontWeight=(el.style.fontWeight=="bold"?"normal":"bold");
+      if(type=="italic") el.style.fontStyle=(el.style.fontStyle=="italic"?"normal":"italic");
+    }
+    document.querySelectorAll('button[data-style]').forEach(btn=>{
+      btn.addEventListener('click', ()=> toggleStyle(btn.dataset.target, btn.dataset.style));
+    });
+    document.getElementById('eventName').addEventListener('input',e=>title.textContent=e.target.value||'Event Name');
+    document.getElementById('eventColor').addEventListener('input',e=>title.style.color=e.target.value);
+    document.getElementById('eventFont').addEventListener('change',e=>title.style.fontFamily=e.target.value);
+    document.getElementById('eventFontSize').addEventListener('input',e=>title.style.fontSize=e.target.value+"px");
+    document.getElementById('branchName').addEventListener('input',e=>branch.textContent=e.target.value||'Branch Name');
+    document.getElementById('branchColor').addEventListener('input',e=>branch.style.color=e.target.value);
+    document.getElementById('branchFont').addEventListener('change',e=>branch.style.fontFamily=e.target.value);
+    document.getElementById('branchFontSize').addEventListener('input',e=>branch.style.fontSize=e.target.value+"px");
+
+    /* ================== DATE ================== */
+    const datePicker = document.getElementById('datePicker');
+    const dateColor  = document.getElementById('dateColor');
+    const dateFont   = document.getElementById('dateFont');
+    const dateFontSize = document.getElementById('dateFontSize');
+    const clearDateBtn = document.getElementById('clearDateBtn');
+    document.getElementById('dateBoldBtn').addEventListener('click', ()=>toggleStyle('dateText','bold'));
+    document.getElementById('dateItalicBtn').addEventListener('click', ()=>toggleStyle('dateText','italic'));
+    datePicker.addEventListener('change', e=>{
+      const val = e.target.value;
+      if(!val){ dateText.style.display='none'; return; }
+      const d = new Date(val);
+      const formatted = d.toLocaleDateString('en-GB',{ day:'2-digit', month:'short', year:'numeric'});
+      dateText.textContent = formatted; dateText.style.display='block';
+    });
+    clearDateBtn.addEventListener('click', ()=>{ datePicker.value=''; dateText.style.display='none'; dateText.textContent=''; });
+    dateColor.addEventListener('input', e=>{ if(dateText.style.display!=='none') dateText.style.color = e.target.value; });
+    dateFont.addEventListener('change', e=>{ if(dateText.style.display!=='none') dateText.style.fontFamily = e.target.value; });
+    dateFontSize.addEventListener('input', e=>{ if(dateText.style.display!=='none') dateText.style.fontSize = e.target.value + 'px'; });
+
+    /* ================== BACKGROUND ================== */
+    const bgColorPicker = document.getElementById('bgColorPicker');
+    const grad1 = document.getElementById('grad1');
+    const grad2 = document.getElementById('grad2');
+    const gradDir = document.getElementById('gradDir');
+    document.getElementById('applyGradBtn').addEventListener('click', ()=> {
+      poster.style.background = `linear-gradient(${gradDir.value}, ${grad1.value}, ${grad2.value})`;
+    });
+    document.getElementById('clearGradBtn').addEventListener('click', ()=> {
+      poster.style.background = bgColorPicker.value;
+    });
+    bgColorPicker.addEventListener('input', e=>{ poster.style.background = e.target.value; });
+
+    /* ================== AUTO GRID ================== */
+    function getGridRects(n) {
+      const P = { w: 1080, h: 1080 };
+      const gap = 10;
+      const outerGap = 10;
+      const topOffset = 260;
+      const gridH = 760;
+
+      if (n === 0) return [];
+
+      const cols = Math.min(n, 3);
+      const rows = Math.ceil(n / cols);
+      const totalInnerGapX = (cols - 1) * gap;
+      const totalInnerGapY = (rows - 1) * gap;
+
+      const usableW = P.w - (2 * outerGap);
+      const usableH = gridH - (2 * outerGap);
+
+      const cellW = (usableW - totalInnerGapX) / cols;
+      const cellH = (usableH - totalInnerGapY) / rows;
+
+      const rects = [];
+      for (let i = 0; i < n; i++) {
+        const r = Math.floor(i / cols);
+        const c = i % cols;
+
+        const x = outerGap + c * (cellW + gap);
+        const y = topOffset + outerGap + r * (cellH + gap);
+
+        rects.push({
+          x: Math.round(x),
+          y: Math.round(y),
+          w: Math.round(cellW),
+          h: Math.round(cellH),
+        });
+      }
+      return rects;
+    }
+
+    /* ===== AUTO-FIT POSTER LIKE CANVA ===== */
+    function autoFitPoster() {
+      const poster = document.getElementById('poster');
+      const container = document.querySelector('.poster-container');
+      if (!poster || !container) return;
+
+      const containerW = container.clientWidth;
+      const containerH = container.clientHeight;
+      const posterW = 1080;
+      const posterH = 1080;
+      const scale = Math.min(containerW / posterW, containerH / posterH);
+      poster.style.transform = `scale(${scale})`;
+    }
+    window.addEventListener('load', autoFitPoster);
+    window.addEventListener('resize', autoFitPoster);
+
+    /* ================== IMAGE INPUT & RENDER ================== */
+    const input = document.getElementById('imageInput');
+    input && input.addEventListener('change', ()=>{
+      const files = Array.from(input.files).slice(0, 6 - photosArr.length);
+      files.forEach(f=>{
+        if(!f.type.startsWith('image/')) return;
+        const reader = new FileReader();
+        reader.onload = e=> addPhoto(e.target.result);
+        reader.readAsDataURL(f);
+      });
+      input.value = "";
+    });
+
+    function addPhoto(src){
+      if(photosArr.length>=6){ alert("Max 6 photos"); return; }
+      const temp = new Image();
+      temp.onload = ()=>{
+        const ar = temp.width / temp.height;
+        photosArr.push({ src, x:0, y:0, w:200, h:200/ar, ar, flipped:false });
+        autoPlace();
+      };
+      temp.src = src;
+    }
+
+    function autoPlace(){
+      const rects = getGridRects(photosArr.length);
+      photosArr.forEach((p,i)=>{
+        const r = rects[i];
+        const targetAR = r.w / r.h;
+        let w,h,x,y;
+        if (p.ar > targetAR){
+          w = r.w; h = Math.round(w / p.ar); x = r.x; y = Math.round(r.y + (r.h - h)/2);
+        } else {
+          h = r.h; w = Math.round(h * p.ar); x = Math.round(r.x + (r.w - w)/2); y = r.y;
+        }
+        p.x = x; p.y = y; p.w = w; p.h = h;
+      });
+      renderPhotos();
+    }
+
+    function renderPhotos(){
+      poster.querySelectorAll('.image-box').forEach(b=>b.remove());
+
+      photosArr.forEach((p, idx)=>{
+        const box = document.createElement('div');
+        box.className = 'image-box';
+        box.style.left = p.x + 'px';
+        box.style.top  = p.y + 'px';
+        box.style.zIndex = (++zCounter).toString();
+
+        const img = document.createElement('img');
+        img.src = p.src;
+        img.style.width  = p.w + 'px';
+        img.style.height = p.h + 'px';
+        img.style.filter = buildFilterString();
+        img.style.transform = p.flipped ? 'scaleX(-1)' : 'scaleX(1)';
+        img.draggable = false;
+        box.appendChild(img);
+
+        // Controls
+        const del = document.createElement('button');
+        del.className = 'ibtn'; del.textContent='X'; del.title='Delete';
+        del.onclick = (ev)=>{ ev.stopPropagation(); photosArr.splice(idx,1); autoPlace(); };
+        box.appendChild(del);
+
+        const flip = document.createElement('button');
+        flip.className='flip-btn'; flip.textContent='↔'; flip.title='Flip';
+        flip.onclick = (ev)=>{ ev.stopPropagation(); p.flipped = !p.flipped; img.style.transform = p.flipped?'scaleX(-1)':'scaleX(1)'; };
+        box.appendChild(flip);
+
+        const crop = document.createElement('button');
+        crop.className='crop-btn'; crop.textContent='✂'; crop.title='Crop';
+        crop.onclick = (ev)=>{ ev.stopPropagation(); openEditor(idx); };
+        box.appendChild(crop);
+
+        // Handles
+        ['tl','tr','bl','br'].forEach(pos=>{
+          const h = document.createElement('div'); h.className = `handle ${pos}`; box.appendChild(h);
+        });
+
+        // Select + bring front
+        box.addEventListener('mousedown', ()=>{
+          poster.querySelectorAll('.image-box').forEach(b=>b.classList.remove('selected'));
+          box.classList.add('selected');
+          box.style.zIndex = (++zCounter).toString();
+        });
+
+        // Drag free (fixed offset)
+        let isDragging=false, startX=0, startY=0, sL=0, sT=0;
+        box.addEventListener('mousedown', e=>{
+          if (e.target.classList.contains('handle')) return;
+          isDragging = true; startX = e.clientX; startY = e.clientY; sL = p.x; sT = p.y; e.preventDefault();
+        });
+        document.addEventListener('mousemove', e=>{
+          if(!isDragging) return;
+          const dx = e.clientX - startX, dy = e.clientY - startY;
+          p.x = sL + dx; p.y = sT + dy;
+          box.style.left = p.x + 'px'; box.style.top = p.y + 'px';
+        });
+        document.addEventListener('mouseup', ()=>{ isDragging=false; });
+
+        // Resize with AR
+        let isResizing=false, handleType='', sW=0,sH=0,sX=0,sY=0,sL2=0,sT2=0;
+        box.querySelectorAll('.handle').forEach(h=>{
+          h.addEventListener('mousedown', e=>{
+            isResizing=true;
+            handleType = [...e.target.classList].includes('tl') ? 'tl' :
+                         [...e.target.classList].includes('tr') ? 'tr' :
+                         [...e.target.classList].includes('bl') ? 'bl' : 'br';
+            sW=p.w; sH=p.h; sX=e.clientX; sY=e.clientY; sL2=p.x; sT2=p.y;
+            e.preventDefault(); e.stopPropagation();
+          });
+        });
+        document.addEventListener('mousemove', e=>{
+          if(!isResizing) return;
+          const dx = e.clientX - sX;
+          let newW=sW, newH=sH, newL=sL2, newT=sT2, ar=p.ar;
+          if (handleType==='br'){ newW = sW + dx; newH = Math.round(newW / ar); }
+          if (handleType==='bl'){ newW = sW - dx; newH = Math.round(newW / ar); newL = sL2 + (sW - newW); }
+          if (handleType==='tr'){ newW = sW + dx; newH = Math.round(newW / ar); newT = sT2 + (sH - newH); }
+          if (handleType==='tl'){ newW = sW - dx; newH = Math.round(newW / ar); newL = sL2 + (sW - newW); newT = sT2 + (sH - newH); }
+          if (newW < 40) return;
+          p.w=newW; p.h=newH; p.x=newL; p.y=newT;
+          img.style.width=p.w+'px'; img.style.height=p.h+'px'; box.style.left=p.x+'px'; box.style.top=p.y+'px';
+        });
+        document.addEventListener('mouseup', ()=>{ isResizing=false; });
+
+        // Wheel zoom (cursor-centered)
+        box.addEventListener('wheel', (e)=>{
+          e.preventDefault();
+          const posterRect = poster.getBoundingClientRect();
+          const cursorX = e.clientX - posterRect.left;
+          const cursorY = e.clientY - posterRect.top;
+
+          const fx = (cursorX - p.x) / p.w;
+          const fy = (cursorY - p.y) / p.h;
+
+          const scale = (e.deltaY < 0) ? 1.08 : 0.92;
+          let newW = p.w * scale;
+          if (newW < 40) newW = 40;
+          if (newW > 1600) newW = 1600;
+          const newH = Math.round(newW / p.ar);
+
+          const newX = cursorX - fx * newW;
+          const newY = cursorY - fy * newH;
+
+          p.w = newW; p.h = newH; p.x = newX; p.y = newY;
+
+          img.style.width = p.w + 'px';
+          img.style.height = p.h + 'px';
+          box.style.left = p.x + 'px';
+          box.style.top  = p.y + 'px';
+        }, { passive:false });
+
+        poster.appendChild(box);
+      });
+
+      applyFiltersToAllImages();
+    }
+
+    /* ================== CROP EDITOR ================== */
+    function openEditor(index){
+      currentEditingIndex = index;
+      const cropImage = document.getElementById("cropImage");
+      cropImage.src = photosArr[index].src;
+
+      const modal = document.getElementById("editorModal");
+      modal.style.display = "flex";
+
+      setTimeout(() => {
+        if (cropImage.complete) {
+          cropper = new Cropper(cropImage, { viewMode:1, dragMode:'move', autoCropArea:1 });
+        } else {
+          cropImage.onload = () => {
+            cropper = new Cropper(cropImage, { viewMode:1, dragMode:'move', autoCropArea:1 });
+          };
+        }
+      }, 120);
+    }
+    function applyCrop() {
+      if (!cropper) { alert("Cropper not ready yet."); return; }
+      const p = photosArr[currentEditingIndex];
+      const canvas = cropper.getCroppedCanvas({ width: 540, height: 420 });
+      if (!canvas) { alert("Could not get cropped canvas."); return; }
+      const newSrc = canvas.toDataURL();
+      p.src = newSrc;
+
+      const tempImg = new Image();
+      tempImg.onload = () => {
+        const newAR = tempImg.width / tempImg.height;
+        p.ar = newAR;
+        const newW = p.w;
+        const newH = Math.round(newW / newAR);
+        p.w = newW; p.h = newH;
+        closeEditor();
+        renderPhotos();
+      };
+      tempImg.src = newSrc;
+    }
+    function closeEditor(){
+      document.getElementById('editorModal').style.display='none';
+      const cropImage = document.getElementById('cropImage');
+      cropImage.onload = null; cropImage.onerror = null; cropImage.src = '';
+      if(cropper){ try{ cropper.destroy(); }catch(e){} cropper=null; }
+      currentEditingIndex = -1;
+    }
+    document.getElementById('applyCropBtn').addEventListener('click', applyCrop);
+    document.getElementById('closeCropBtn').addEventListener('click', closeEditor);
+
+    /* ================== SHUFFLE (re-auto-grid) ================== */
+    document.getElementById('shuffleBtn').addEventListener('click', ()=>{
+      photosArr.sort(()=>Math.random()-0.5);
+      autoPlace();
+    });
+
+    /* ================== FRAMES ================== */
+    function applyFrame() {
+      const frames = ['frame-none','frame-black','frame-golden','frame-rounded','frame-shadow','frame-dotted','frame-blue','frame-red','frame-green','frame-custom'];
+      poster.classList.remove(...frames);
+      const sel = document.getElementById("frameStyle").value;
+      poster.classList.add(sel);
+      poster.style.border = "";
+      if (sel === "frame-custom") {
+        const color = document.getElementById("frameColor").value || "#ff00ff";
+        poster.style.setProperty("border", `5px solid ${color}`, "important");
+      }
+    }
+    document.getElementById("frameStyle").addEventListener("change", applyFrame);
+    document.getElementById("frameColor").addEventListener("input", () => {
+      if (document.getElementById("frameStyle").value === "frame-custom") {
+        const color = document.getElementById("frameColor").value;
+        poster.style.setProperty("border", `5px solid ${color}`, "important");
+      }
+    });
+
+    /* ================== DOWNLOAD (fixed blink/scale) ================== */
+    function downloadPoster() {
+      const posterEl = document.getElementById('poster');
+
+      const clone = posterEl.cloneNode(true);
+      clone.style.transform = 'none';
+      clone.style.transformOrigin = 'top left';
+      clone.style.position = 'fixed';
+      clone.style.left = '-9999px';
+      clone.style.top = '0';
+      clone.style.zIndex = '-1';
+      clone.style.boxShadow = 'none';
+      document.body.appendChild(clone);
+
+      html2canvas(clone, {
+        backgroundColor: "#ffffff",
+        scale: 2.5,
+        scrollX: 0,
+        scrollY: 0,
+        useCORS: true,
+        allowTaint: true,
+        logging: false,
+        ignoreElements: (el) =>
+          el.classList &&
+          (
+            el.classList.contains("sticker-del") ||
+            el.classList.contains("sticker-flip") ||
+            el.classList.contains("ibtn") ||
+            el.classList.contains("flip-btn") ||
+            el.classList.contains("crop-btn") ||
+            el.classList.contains("handle") ||
+            el.classList.contains("txt-del") ||
+            el.id === "editorModal"
+          ),
+      })
+      .then((canvas) => {
+        const finalCanvas = document.createElement("canvas");
+        finalCanvas.width = 1080;
+        finalCanvas.height = 1080;
+        finalCanvas.getContext("2d").drawImage(canvas, 0, 0, 1080, 1080);
+
+        const link = document.createElement("a");
+        link.download = "poster.png";
+        link.href = finalCanvas.toDataURL("image/png");
+        link.click();
+      })
+      .catch((err) => {
+        console.error(err);
+        alert("Download failed. Please try again.");
+      })
+      .finally(() => {
+        document.body.removeChild(clone);
+      });
+    }
+    document.getElementById('downloadBtn').addEventListener('click', downloadPoster);
+
+    /* ================== RESET ================== */
+    function resetPoster(){
+      title.textContent='Event Name'; branch.textContent='Branch Name'; title.style=''; branch.style='';
+      title.style.position='absolute'; branch.style.position='absolute';
+      title.style.top='130px'; title.style.left='50%'; title.style.transform='translateX(-50%)';
+      branch.style.top='175px'; branch.style.left='50%'; branch.style.transform='translateX(-50%)';
+      document.getElementById('eventName').value=''; document.getElementById('branchName').value='';
+      document.getElementById('eventColor').value='#000000'; document.getElementById('branchColor').value='#000000';
+      document.getElementById('eventFont').value='Poppins'; document.getElementById('branchFont').value='sans-serif';
+      document.getElementById('eventFontSize').value=30; document.getElementById('branchFontSize').value=22;
+      document.getElementById('bgColorPicker').value='#ffffff'; poster.style.background='#ffffff';
+      poster.querySelectorAll('.sticker').forEach(s=>s.remove());
+      photosArr=[]; poster.querySelectorAll('.image-box').forEach(b=>b.remove());
+      document.getElementById('logo').src='https://srichaitanyaschoolacademics.com/1';
+      // Filters
+      filterState.brightness=100; filterState.contrast=100;
+      document.getElementById('brightness').value=100; document.getElementById('contrast').value=100;
+      applyFiltersToAllImages();
+      // Frames
+      document.getElementById('frameStyle').value='frame-none';
+      document.getElementById('frameColor').value='#000000';
+      applyFrame();
+      // Date
+      document.getElementById('datePicker').value='';
+      dateText.style.display='none'; dateText.textContent='';
+      dateText.style.top='100px'; dateText.style.right='40px'; dateText.style.left='';
+      // Quotes / Text
+      textBoxes.splice(0, textBoxes.length);
+      poster.querySelectorAll('.quote-box').forEach(q=>q.remove());
+      currentTextEl = null;
+      // Sidebar quote defaults
+      document.getElementById('qFont').value='Poppins';
+      document.getElementById('qSize').value=28;
+      document.getElementById('qColor').value='#000000';
+      setAlignButtons(null); // clear active state
+    }
+    document.getElementById('resetBtn').addEventListener('click', resetPoster);
+
+    /* ================== STICKERS ================== */
+    function addEmojiSticker(symbol){
+      const s=document.createElement('div'); s.className='sticker'; s.style.left='100px'; s.style.top='100px'; s.textContent=symbol;
+      const del=document.createElement('div'); del.className='sticker-del'; del.textContent='×';
+      const flip=document.createElement('div'); flip.className='sticker-flip'; flip.textContent='↔';
+      s.appendChild(del); s.appendChild(flip); poster.appendChild(s); makeDraggable(s);
+      del.addEventListener('click',(ev)=>{ ev.stopPropagation(); s.remove(); });
+      flip.addEventListener('click',()=>{ const flipped = s.dataset.flipped==="true"; s.dataset.flipped = (!flipped).toString(); s.style.transform = flipped?"scaleX(1)":"scaleX(-1)"; });
+      s.addEventListener('wheel',(e)=>{ e.preventDefault(); const cur=parseInt(window.getComputedStyle(s).fontSize,10)||64; let next=cur + (e.deltaY<0?6:-6); if(next<24) next=24; if(next>200) next=200; s.style.fontSize=next+'px'; }, {passive:false});
+    }
+    document.querySelectorAll('button[data-emoji]').forEach(btn=>{
+      btn.addEventListener('click', ()=> addEmojiSticker(btn.dataset.emoji));
+    });
+
+    document.getElementById('stickerUpload').addEventListener('change', ()=>{
+      const f=document.getElementById('stickerUpload').files[0]; if(!f||!f.type.startsWith('image/')) return;
+      const url=URL.createObjectURL(f);
+      const w=document.createElement('div'); w.className='sticker'; w.style.left='120px'; w.style.top='120px'; w.style.fontSize='0';
+      const img=document.createElement('img'); img.src=url; img.style.width='120px'; img.style.height='auto'; img.style.pointerEvents='none';
+      const del=document.createElement('div'); del.className='sticker-del'; del.textContent='×';
+      const flip=document.createElement('div'); flip.className='sticker-flip'; flip.textContent='↔';
+      w.appendChild(img); w.appendChild(del); w.appendChild(flip); poster.appendChild(w); makeDraggable(w);
+      del.addEventListener('click',(ev)=>{ ev.stopPropagation(); w.remove(); });
+      flip.addEventListener('click',()=>{ const fl=w.dataset.flipped==="true"; w.dataset.flipped = (!fl).toString(); img.style.transform = fl?"scaleX(1)":"scaleX(-1)"; });
+      w.addEventListener('wheel',(e)=>{ e.preventDefault(); const cur=parseInt(img.style.width)||120; let next=cur + (e.deltaY<0?12:-12); if(next<40) next=40; if(next>600) next=600; img.style.width=next+'px'; }, {passive:false});
+      document.getElementById('stickerUpload').value="";
+    });
+
+    /* ================== QUOTES / CUSTOM TEXT ================== */
+    const qFont   = document.getElementById('qFont');
+    const qSize   = document.getElementById('qSize');
+    const qColor  = document.getElementById('qColor');
+    const qBold   = document.getElementById('qBoldBtn');
+    const qItalic = document.getElementById('qItalicBtn');
+    const addTextBtn = document.getElementById('addTextBtn');
+    const delSelectedTextBtn = document.getElementById('delSelectedTextBtn');
+
+    const alignLeftBtn   = document.getElementById('alignLeft');
+    const alignCenterBtn = document.getElementById('alignCenter');
+    const alignRightBtn  = document.getElementById('alignRight');
+    const alignBtns = [alignLeftBtn, alignCenterBtn, alignRightBtn];
+
+    function setAlignButtons(which){
+      alignBtns.forEach(b=>b.classList.remove('active'));
+      if (which === 'left') alignLeftBtn.classList.add('active');
+      if (which === 'center') alignCenterBtn.classList.add('active');
+      if (which === 'right') alignRightBtn.classList.add('active');
+    }
+
+    function deselectAllQuotes(){
+      poster.querySelectorAll('.quote-box').forEach(el => el.classList.remove('selected'));
+      currentTextEl = null;
+    }
+
+    function selectQuote(el){
+      deselectAllQuotes();
+      el.classList.add('selected');
+      currentTextEl = el;
+      el.style.zIndex = ++zCounter;
+      // Sync sidebar
+      qFont.value = (el.style.fontFamily || 'Poppins').replaceAll('"','');
+      qSize.value = parseInt(window.getComputedStyle(el).fontSize) || 28;
+      qColor.value = rgbToHex(window.getComputedStyle(el).color) || '#000000';
+      setAlignButtons(getComputedStyle(el).textAlign || 'left');
+    }
+
+    function rgbToHex(rgb){
+      const m = rgb.match(/\d+/g);
+      if(!m) return null;
+      const [r,g,b] = m.map(Number);
+      return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
+    }
+
+    function createTextBox(initialText = "Your quote here"){
+      const el = document.createElement('div');
+      el.className = 'quote-box';
+      el.textContent = initialText;
+      el.style.left = '50%';
+      el.style.top = '230px';
+      el.style.transform = 'translateX(-50%)';
+      el.style.fontFamily = qFont.value || 'Poppins';
+      el.style.fontSize = (qSize.value || 28) + 'px';
+      el.style.color = qColor.value || '#000000';
+      el.style.fontWeight = 'normal';
+      el.style.fontStyle = 'normal';
+      el.style.textAlign = 'left';
+      el.style.zIndex = ++zCounter;
+
+      // Inline edit
+      el.addEventListener('dblclick', (e)=>{
+        e.stopPropagation();
+        el.contentEditable = 'true';
+        el.focus();
+        el.classList.add('selected');
+        currentTextEl = el;
+        el.style.cursor = 'text';
+        el.style.userSelect = 'text';
+      });
+
+      el.addEventListener('blur', ()=>{
+	  el.style.width = 'auto';
+el.style.whiteSpace = 'normal';
+el.style.writingMode = 'horizontal-tb';
+        el.contentEditable = 'false';
+        el.style.cursor = 'move';
+        el.style.userSelect = 'none';
+        if(!el.textContent.trim()) el.textContent = 'Your quote here';
+      });
+
+      // Select on click
+      el.addEventListener('mousedown', (e)=>{
+        if (el.isContentEditable) return;
+        selectQuote(el);
+      });
+
+      // Delete X
+      const del = document.createElement('div');
+      del.className = 'txt-del';
+      del.textContent = '×';
+      del.title = 'Delete';
+      del.addEventListener('mousedown', (ev)=>{ ev.stopPropagation(); });
+      del.addEventListener('click', (ev)=>{
+        ev.stopPropagation();
+        const idx = textBoxes.indexOf(el);
+        if (idx >= 0) textBoxes.splice(idx,1);
+        el.remove();
+        currentTextEl = null;
+        setAlignButtons(null);
+      });
+      el.appendChild(del);
+
+      // Mouse wheel zoom for text (NEW)
+      el.addEventListener('wheel',(e)=>{
+        e.preventDefault();
+        const cur = parseInt(window.getComputedStyle(el).fontSize,10) || 28;
+        let next = cur + (e.deltaY < 0 ? 2 : -2);
+        if (next < 10) next = 10;
+        if (next > 200) next = 200;
+        el.style.fontSize = next + 'px';
+      }, { passive:false });
+
+      poster.appendChild(el);
+      makeDraggable(el);
+      textBoxes.push(el);
+      selectQuote(el);
+    }
+
+    // Sidebar actions
+    addTextBtn.addEventListener('click', ()=> createTextBox("Your quote here"));
+    qFont.addEventListener('change', ()=>{ if(currentTextEl) currentTextEl.style.fontFamily = qFont.value; });
+    qSize.addEventListener('input', ()=>{ if(currentTextEl) currentTextEl.style.fontSize = qSize.value + 'px'; });
+    qColor.addEventListener('input', ()=>{ if(currentTextEl) currentTextEl.style.color = qColor.value; });
+    qBold.addEventListener('click', ()=>{ if(currentTextEl) currentTextEl.style.fontWeight = (currentTextEl.style.fontWeight==='bold'?'normal':'bold'); });
+    qItalic.addEventListener('click', ()=>{ if(currentTextEl) currentTextEl.style.fontStyle = (currentTextEl.style.fontStyle==='italic'?'normal':'italic'); });
+    delSelectedTextBtn.addEventListener('click', ()=>{
+      if(!currentTextEl) return;
+      const idx = textBoxes.indexOf(currentTextEl);
+      if (idx >= 0) textBoxes.splice(idx,1);
+      currentTextEl.remove();
+      currentTextEl = null;
+      setAlignButtons(null);
+    });
+
+    // Alignment (also adjust anchor transform for center)
+    function setAlign(align){
+      if(!currentTextEl) return;
+      currentTextEl.style.textAlign = align;
+      if (align === 'center') {
+        // keep visual centering by anchoring at 50%
+        if (!currentTextEl.style.left) currentTextEl.style.left = '50%';
+        currentTextEl.style.transform = 'translateX(-50%)';
+      } else {
+        // for left/right we remove centering transform (free place)
+        currentTextEl.style.transform = 'none';
+      }
+      setAlignButtons(align);
+    }
+    alignLeftBtn.addEventListener('click', ()=> setAlign('left'));
+    alignCenterBtn.addEventListener('click', ()=> setAlign('center'));
+    alignRightBtn.addEventListener('click', ()=> setAlign('right'));
+
+    // Click outside to deselect
+    poster.addEventListener('mousedown', (e)=>{
+      if (!e.target.closest('.quote-box')) {
+        deselectAllQuotes();
+        setAlignButtons(null);
+      }
+    });
+
+    // (Removed duplicate shuffle listener that previously existed here)
+
+  </script>
+</body>
+</html>
