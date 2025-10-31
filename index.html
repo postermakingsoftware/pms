@@ -188,6 +188,16 @@
       .main{ margin-right:0; margin-top: 0; height: auto; min-height: calc(100vh - 16px); }
       body{ overflow-x:hidden; }
     }
+	
+/* Disable browser gestures interference */
+* {
+  touch-action: manipulation;
+}
+.image-box, .shape-box, .sticker {
+  touch-action: none !important;
+  user-select: none;
+}
+
   </style>
 </head>
 <body>
@@ -501,7 +511,7 @@
     <!-- Poster -->
     <div class="poster-container" style="background: linear-gradient(135deg, #f8f5ff, #e3e6ff);">
       <div id="poster" class="frame-none">
-       <img id="logo" src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/1.png" alt="Logo" />
+        <img id="logo" src="https://srichaitanyaschoolacademics.com/1" alt="Logo" />
         <div id="title">Event Name</div>
         <div id="branch">Branch Name</div>
         <div id="dateText"></div>
@@ -1366,6 +1376,85 @@
     shapeOpacity.addEventListener('input', ()=>{ if(currentShape) currentShape.style.opacity = (parseInt(shapeOpacity.value,10)/100).toString(); });
     shapeRadius.addEventListener('input',  ()=>{ if(currentShape) currentShape.style.borderRadius = shapeRadius.value + 'px'; });
     shapeStroke.addEventListener('input',  ()=>{ if(currentShape){ const s=parseInt(shapeStroke.value||'0',10); currentShape.style.border = s>0 ? (s+"px solid rgba(0,0,0,0.6)") : 'none'; }});
+	
+/* ================== MOBILE PINCH ZOOM (FINAL — FIXED + COMPATIBLE) ================== */
+function enablePinchZoom(el, type = 'photo') {
+  let startDist = 0, startW = 0, startH = 0, startFont = 0;
+  let isPinching = false;
+
+  function getDistance(touches) {
+    const [t1, t2] = touches;
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  el.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      isPinching = true;
+      startDist = getDistance(e.touches);
+
+      if (el.querySelector('img')) {
+        const img = el.querySelector('img');
+        startW = img.offsetWidth;
+        startH = img.offsetHeight;
+      } else {
+        startW = el.offsetWidth;
+        startH = el.offsetHeight;
+        startFont = parseInt(window.getComputedStyle(el).fontSize) || 64;
+      }
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  el.addEventListener('touchmove', (e) => {
+    if (isPinching && e.touches.length === 2) {
+      const newDist = getDistance(e.touches);
+      const scale = newDist / startDist;
+
+      if (el.classList.contains('image-box')) {
+        const img = el.querySelector('img');
+        img.style.width = Math.max(40, startW * scale) + 'px';
+        img.style.height = Math.max(40, startH * scale) + 'px';
+      } else if (el.classList.contains('shape-box')) {
+        el.style.width = Math.max(20, startW * scale) + 'px';
+        el.style.height = Math.max(20, startH * scale) + 'px';
+      } else if (el.classList.contains('sticker')) {
+        const img = el.querySelector('img');
+        if (img) {
+          img.style.width = Math.max(40, startW * scale) + 'px';
+          img.style.height = Math.max(40, startH * scale) + 'px';
+        } else {
+          el.style.fontSize = Math.min(200, Math.max(24, startFont * scale)) + 'px';
+        }
+      }
+      e.stopPropagation();
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  el.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) {
+      isPinching = false;
+      startDist = 0;
+    }
+  });
+}
+
+/* Observe new poster elements for pinch */
+const pinchObserver = new MutationObserver(() => {
+  document.querySelectorAll('.image-box, .shape-box, .sticker').forEach(el => {
+    if (!el.dataset.pinchEnabled) {
+      enablePinchZoom(el);
+      el.dataset.pinchEnabled = 'true';
+    }
+  });
+});
+pinchObserver.observe(document.getElementById('poster'), { childList: true, subtree: true });
+
+
+
 
   </script>
 </body>
