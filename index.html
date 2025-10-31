@@ -189,15 +189,14 @@
       body{ overflow-x:hidden; }
     }
 	
-/* Disable browser gestures interference */
+/* ✅ Enable proper mobile pinch zoom (fixed) */
 * {
-  touch-action: manipulation;
+  touch-action: pan-x pan-y pinch-zoom;
 }
 .image-box, .shape-box, .sticker {
-  touch-action: none !important;
+  touch-action: pinch-zoom !important;
   user-select: none;
 }
-
   </style>
 </head>
 <body>
@@ -1459,4 +1458,5 @@ pinchObserver.observe(document.getElementById('poster'), { childList: true, subt
   </script>
 </body>
 </html>
+
 
