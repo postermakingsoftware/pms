@@ -2,12 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
- <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>PMS — Poster Making Software</title>
 
   <!-- Libraries -->
   <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Roboto:wght@400;700&family=Lobster&family=Pacifico&family=Oswald:wght@400;700&family=Playfair+Display:wght@400;700&display=swap" rel="stylesheet">
+
+  <!-- BodyPix / TensorFlow (for client-side BG removal - unused here but kept) -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.8.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.0.5/dist/body-pix.min.js"></script>
 
   <style>
     :root{
@@ -109,20 +113,33 @@
     /* ===== Free-move Image Boxes ===== */
     .image-box{
       position:absolute; display:inline-block;
-      border:2px solid #fff;
+      border:2px solid transparent;
       outline: 0;
       touch-action: none;
       cursor: move;
+      background: transparent;
+      overflow: visible; /* important so controls aren't clipped */
     }
     .image-box.selected{ outline:1px dashed #00bfff; outline-offset:-1px; }
+
+    /* inner wrapper clips the image and applies radius */
+    .image-inner{
+      position: absolute;
+      left:0; top:0;
+      overflow: hidden;
+      display:block;
+      width:100%; height:100%;
+      box-sizing: border-box; /* ensure border counted inside size */
+    }
+
     .image-box img{
       display:block;
-      width:200px;
-      height:auto;
+      position:relative;
       user-select:none;
       pointer-events:none;
       will-change: transform, filter, box-shadow;
       transition: transform 0.35s ease, filter 0.35s ease, box-shadow 0.35s ease;
+      z-index:1;
     }
     .image-box:hover img{ transform: scale(1.08); filter: brightness(1.1); box-shadow: 0 10px 25px rgba(0,0,0,0.3);}    
     .image-box.selected img{ box-shadow: 0 0 0 3px #00bfff, 0 6px 20px rgba(0,0,0,0.3); transform: scale(1.05); }
@@ -133,9 +150,9 @@
     .handle.bl{ bottom:-6px; left:-6px; cursor:nesw-resize; }
     .handle.br{ bottom:-6px; right:-6px; cursor:nwse-resize; }
 
-    .ibtn{ z-index:11; position:absolute; top:6px; right:6px; background:#ef476f; color:#fff; border:none; padding:6px 8px; font-size:12px; border-radius:8px; cursor:pointer; }
-    .flip-btn{ z-index:10; position:absolute; top:6px; left:6px; background:#4361ee; color:#fff; border:none; border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer; }
-    .crop-btn{ z-index:10; position:absolute; bottom:6px; left:6px; background:#118ab2; color:#fff; border:none; border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer; }
+    .ibtn{ z-index:9999 !important; position:absolute; top:6px; right:6px; background:#ef476f; color:#fff; border:none; padding:6px 8px; font-size:12px; border-radius:8px; cursor:pointer; }
+    .flip-btn{ z-index:9999 !important; position:absolute; top:6px; left:6px; background:#4361ee; color:#fff; border:none; border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer; }
+    .crop-btn{ z-index:9999 !important; position:absolute; bottom:6px; left:6px; background:#118ab2; color:#fff; border:none; border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer; }
 
     /* ===== Stickers ===== */
     .sticker{ position:absolute; cursor:move; user-select:none; font-size:64px; touch-action: none; }
@@ -143,15 +160,15 @@
     .sticker .sticker-flip{ position:absolute; bottom:-10px; right:-10px; width:22px; height:22px; background:#007bff; color:#fff; border-radius:50%; font-weight:bold; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px; }
 
     /* ===== Shapes ===== */
-    .shape-box{ position:absolute; cursor:move; touch-action:none; border: none; }
+    .shape-box{ position:absolute; cursor:move; touch-action:none; border: none; overflow: visible; } /* allow del button to show outside */
     .shape-box.selected{ outline:1px dashed #00bfff; outline-offset:2px; }
     .shape-handle{ width:12px; height:12px; background:#00bfff; position:absolute; border-radius:50%; display:none; }
     .shape-box.selected .shape-handle{ display:block; }
     .shape-handle.tl{ top:-6px; left:-6px; cursor:nwse-resize; }
     .shape-handle.tr{ top:-6px; right:-6px; cursor:nesw-resize; }
     .shape-handle.bl{ bottom:-6px; left:-6px; cursor:nesw-resize; }
-    .shape-handle.br{ bottom:-6px; right:-6px; cursor:nwse-resize; }
-    .shape-del{ position:absolute; top:-10px; right:-10px; width:22px; height:22px; background:#ef476f; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:13px; cursor:pointer; }
+    .shape-handle.br{ bottom:-6px; right:-6px; cursor:nesw-resize; }
+    .shape-del{ position:absolute; top:-12px; right:-12px; width:28px; height:28px; background:#ef476f; color:#fff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:14px; cursor:pointer; z-index:9999; box-shadow: 0 4px 10px rgba(0,0,0,0.25); }
 
     /* ===== Crop Modal ===== */
     #editorModal{ position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.7); display:none; justify-content:center; align-items:center; z-index:1000; }
@@ -171,7 +188,7 @@
     .frame-custom{ border:5px solid #ff00ff; }
 
     /* ===== Quotes / Custom Text ===== */
-    .quote-box{ position: absolute; min-width: 120px; max-width: 800px; padding: 4px 8px; cursor: move; user-select: none; background: transparent; line-height: 1.3; white-space: normal !important; word-break: break-word; overflow-wrap: break-word; display: block !important; writing-mode: horizontal-tb !important; text-orientation: mixed !important; transform-origin: left top; touch-action: none; }
+    .quote-box{ position: absolute; min-width: 120px; max-width: 800px; padding: 4px 8px; cursor: move; user-select: none; background: transparent; line-height: 1.3; white-space: pre-wrap !important; word-break: break-word; overflow-wrap: break-word; display: inline-block !important; writing-mode: initial !important; text-orientation: initial !important; transform-origin: left top; touch-action: none; }
     .quote-box.selected{ outline: 1px dashed #00bfff; outline-offset: 2px; }
     .txt-del{ position:absolute; top: -10px; right: -10px; width: 22px; height: 22px; background:#ef476f; color:#fff; border-radius: 50%; font-weight: bold; font-size: 13px; display:flex; align-items:center; justify-content:center; cursor:pointer; transform: translate(50%, -50%); box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
     .align-group{ display:flex; gap:8px; }
@@ -188,15 +205,18 @@
       .main{ margin-right:0; margin-top: 0; height: auto; min-height: calc(100vh - 16px); }
       body{ overflow-x:hidden; }
     }
-	
-/* ✅ Enable proper mobile pinch zoom (fixed) */
-* {
-  touch-action: pan-x pan-y pinch-zoom;
-}
-.image-box, .shape-box, .sticker {
-  touch-action: pinch-zoom !important;
-  user-select: none;
-}
+    
+  /* ✅ Enable proper mobile pinch zoom (fixed) */
+  * {
+    touch-action: pan-x pan-y pinch-zoom;
+  }
+  .image-box, .shape-box, .sticker {
+    touch-action: pinch-zoom !important;
+    user-select: none;
+  }
+  #title, #branch, #dateText {
+    transition: font-size 0.2s ease;
+  }
   </style>
 </head>
 <body>
@@ -351,36 +371,61 @@
       <div class="hint">Tip: Mouse wheel on sticker to resize</div>
     </div>
 
-    <!-- 🧱 Add Shape (Rectangles/Strips) -->
+    <!-- 🧱 Add Shape (Rectangles/Strips + extended) -->
     <div class="section">
       <h3>🧱 Add Shape</h3>
+
+      <!-- Shape Controls (simplified: solid fills only) -->
+      <div class="row" style="margin-bottom:8px;">
+        <div>
+          <label>Shape Type</label>
+          <select id="shapeType">
+            <option value="rect">Rectangle</option>
+           
+            <option value="circle">Circle</option>
+          
+          </select>
+        </div>
+        <div>
+          <label>Fill</label>
+          <input type="color" id="shapeColor" value="#ff4d6d"/>
+        </div>
+      </div>
+
+      <div class="row" style="margin-bottom:8px;">
+       
+      </div>
+
+
       <div class="row">
         <div>
-          <label>Fill Color</label>
-          <input type="color" id="shapeColor" value="#ff4d6d"/>
+          <label>Stroke Color</label>
+          <input type="color" id="shapeStrokeColor" value="#000000"/>
+        </div>
+        <div>
+          <label>Stroke Width (px)</label>
+          <input type="number" id="shapeStroke" min="0" max="40" value="0"/>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:6px;">
+        <div>
+          <label>Border Radius</label>
+          <input type="number" id="shapeRadius" min="0" max="200" value="10"/>
         </div>
         <div>
           <label>Opacity</label>
-          <input type="range" id="shapeOpacity" min="10" max="100" value="100"/>
+          <input type="range" id="shapeOpacity" min="0" max="100" value="100"/>
         </div>
       </div>
-      <div class="row">
-        <div>
-          <label>Border Radius</label>
-          <input type="number" id="shapeRadius" min="0" max="60" value="10"/>
-        </div>
-        <div>
-          <label>Stroke (px)</label>
-          <input type="number" id="shapeStroke" min="0" max="20" value="0"/>
-        </div>
-      </div>
-      <div class="row">
-        <button class="primary" id="addShapeBtn">➕ Add Rectangle</button>
+
+      <div class="row" style="margin-top:8px;">
+        <button class="primary" id="addShapeBtn">➕ Add Shape</button>
         <button class="ghost" id="shapeFrontBtn">Bring To Front</button>
         <button class="ghost" id="shapeBackBtn">Send To Back</button>
         <button class="danger" id="delShapeBtn">Delete Selected</button>
       </div>
-      <div class="hint">Drag to move • Corners to resize • Works as strip when you squash height.</div>
+
     </div>
 
     <!-- 🌈 Background -->
@@ -427,6 +472,33 @@
         <div class="full">Brightness <input type="range" id="brightness" min="50" max="150" value="100"></div>
         <div class="full">Contrast   <input type="range" id="contrast"  min="50" max="150" value="100"></div>
       </div>
+
+      <!-- Image Radius UI -->
+      <div style="margin-top:10px;" class="row full">
+        <label><b>Image Radius</b> <span id="imgRadiusVal">10px</span></label>
+        <input type="range" id="imgRadius" min="0" max="540" value="10" />
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <button class="ghost" id="applyRadiusToAllBtn">Apply to All</button>
+        <button class="ghost" id="resetRadiusBtn">Reset Radius</button>
+      </div>
+
+      <!-- Image Border controls (ADDED) -->
+      <div style="margin-top:12px;" class="row full">
+        <div>
+          <label><b>Image Border Color</b></label>
+          <input type="color" id="imgBorderColor" value="#000000" />
+        </div>
+        <div>
+          <label><b>Border Width (px)</b></label>
+          <input type="number" id="imgBorderWidth" min="0" max="60" value="0" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:6px;">
+        <button class="ghost" id="applyBorderToAllBtn">Apply to All</button>
+        <button class="ghost" id="resetBorderBtn">Reset Border</button>
+      </div>
+
       <div class="row">
         <button class="ghost" id="resetFiltersBtn">Reset Filters</button>
       </div>
@@ -510,7 +582,7 @@
     <!-- Poster -->
     <div class="poster-container" style="background: linear-gradient(135deg, #f8f5ff, #e3e6ff);">
       <div id="poster" class="frame-none">
-       <img id="logo" src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/4.png" alt="Logo" />
+        <img id="logo" src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/4.png" alt="Logo" />
         <div id="title">Event Name</div>
         <div id="branch">Branch Name</div>
         <div id="dateText"></div>
@@ -540,7 +612,7 @@
     const branch = document.getElementById('branch');
     const dateText = document.getElementById('dateText');
 
-    // Photo objects: { src, x, y, w, h, ar, flipped }
+    // Photo objects: { id, src, x, y, w, h, ar, flipped, radius, borderColor, borderWidth }
     let photosArr = []; // max 6
     let zCounter = 10;  // bring-to-front order
 
@@ -549,7 +621,7 @@
     const textBoxes = [];
 
     // Shapes state
-    let shapesArr = []; // {el, x, y, w, h}
+    let shapesArr = []; // reserved but we create DOM nodes directly
     let currentShape = null;
 
     /* ================== FILTERS ================== */
@@ -600,7 +672,7 @@
         const transform = window.getComputedStyle(poster).transform;
         let scale = 1;
         if (transform && transform !== 'none') {
-          const m = transform.match(/matrix\(([\d.]+)/);
+          const m = transform.match(/matrix\(([-\d.]+)/);
           if (m) scale = parseFloat(m[1]);
         }
 
@@ -747,12 +819,119 @@
       input.value = "";
     });
 
+    // ===== Image Radius Control =====
+    const imgRadiusInput = document.getElementById('imgRadius');
+    const imgRadiusVal = document.getElementById('imgRadiusVal');
+    const applyRadiusToAllBtn = document.getElementById('applyRadiusToAllBtn');
+    const resetRadiusBtn = document.getElementById('resetRadiusBtn');
+
+    // ===== Image Border Controls (ADDED) =====
+    const imgBorderColorInput = document.getElementById('imgBorderColor');
+    const imgBorderWidthInput = document.getElementById('imgBorderWidth');
+    const applyBorderToAllBtn = document.getElementById('applyBorderToAllBtn');
+    const resetBorderBtn = document.getElementById('resetBorderBtn');
+
+    // default radius and border for new images
+    let defaultImgRadius = parseInt(imgRadiusInput.value, 10) || 10;
+    let defaultImgBorderColor = imgBorderColorInput.value || '#000000';
+    let defaultImgBorderWidth = parseInt(imgBorderWidthInput.value, 10) || 0;
+    imgRadiusVal.textContent = defaultImgRadius + 'px';
+
+    imgRadiusInput.addEventListener('input', (e) => {
+      const val = parseInt(e.target.value, 10);
+      imgRadiusVal.textContent = val + 'px';
+      defaultImgRadius = val;
+
+      // if an image-box is selected, update that image's radius
+      const selBox = poster.querySelector('.image-box.selected');
+      if (selBox) {
+        const pid = selBox.dataset.pid;
+        const pIdx = photosArr.findIndex(p => p.id === pid);
+        if (pIdx >= 0) {
+          photosArr[pIdx].radius = val;
+        }
+        const inner = selBox.querySelector('.image-inner');
+        if (inner) inner.style.borderRadius = val + 'px';
+      }
+    });
+
+    applyRadiusToAllBtn.addEventListener('click', () => {
+      const val = defaultImgRadius;
+      photosArr.forEach(p => p.radius = val);
+      renderPhotos();
+    });
+
+    resetRadiusBtn.addEventListener('click', () => {
+      const resetTo = 10; // choose sensible default
+      imgRadiusInput.value = resetTo;
+      imgRadiusInput.dispatchEvent(new Event('input'));
+      defaultImgRadius = resetTo;
+      renderPhotos();
+    });
+
+    /* Border inputs behavior */
+    // sync inputs to selected image and update selected image immediate
+    function syncBorderInputsToSelected(box, p) {
+      if (!box || !p) return;
+      imgBorderColorInput.value = p.borderColor || defaultImgBorderColor;
+      imgBorderWidthInput.value = (typeof p.borderWidth === 'number') ? p.borderWidth : defaultImgBorderWidth;
+    }
+
+    imgBorderColorInput.addEventListener('input', (e) => {
+      defaultImgBorderColor = e.target.value;
+      const selBox = poster.querySelector('.image-box.selected');
+      if (selBox) {
+        const pid = selBox.dataset.pid;
+        const idx = photosArr.findIndex(pp => pp.id === pid);
+        if (idx >= 0) {
+          photosArr[idx].borderColor = defaultImgBorderColor;
+          const inner = selBox.querySelector('.image-inner');
+          if (inner) inner.style.border = (photosArr[idx].borderWidth || 0) + 'px solid ' + photosArr[idx].borderColor;
+        }
+      }
+    });
+
+    imgBorderWidthInput.addEventListener('input', (e) => {
+      let val = parseInt(e.target.value, 10);
+      if (isNaN(val) || val < 0) val = 0;
+      defaultImgBorderWidth = val;
+      const selBox = poster.querySelector('.image-box.selected');
+      if (selBox) {
+        const pid = selBox.dataset.pid;
+        const idx = photosArr.findIndex(pp => pp.id === pid);
+        if (idx >= 0) {
+          photosArr[idx].borderWidth = defaultImgBorderWidth;
+          const inner = selBox.querySelector('.image-inner');
+          if (inner) inner.style.border = (photosArr[idx].borderWidth || 0) + 'px solid ' + (photosArr[idx].borderColor || defaultImgBorderColor);
+        }
+      }
+    });
+
+    applyBorderToAllBtn.addEventListener('click', ()=>{
+      const color = imgBorderColorInput.value || defaultImgBorderColor;
+      const width = parseInt(imgBorderWidthInput.value,10) || 0;
+      photosArr.forEach(p => { p.borderColor = color; p.borderWidth = width; });
+      renderPhotos();
+    });
+
+    resetBorderBtn.addEventListener('click', ()=>{
+      const resetColor = '#000000';
+      const resetWidth = 0;
+      imgBorderColorInput.value = resetColor;
+      imgBorderWidthInput.value = resetWidth;
+      defaultImgBorderColor = resetColor;
+      defaultImgBorderWidth = resetWidth;
+      photosArr.forEach(p => { p.borderColor = resetColor; p.borderWidth = resetWidth; });
+      renderPhotos();
+    });
+
     function addPhoto(src){
       if(photosArr.length>=6){ alert("Max 6 photos"); return; }
       const temp = new Image();
       temp.onload = ()=>{
         const ar = temp.width / temp.height;
-        photosArr.push({ src, x:0, y:0, w:200, h:200/ar, ar, flipped:false });
+        const id = (Date.now().toString(36) + Math.random().toString(36).slice(2));
+        photosArr.push({ id, src, x:0, y:0, w:200, h:200/ar, ar, flipped:false, radius: defaultImgRadius || 0, borderColor: defaultImgBorderColor, borderWidth: defaultImgBorderWidth });
         autoPlace();
       };
       temp.src = src;
@@ -762,6 +941,7 @@
       const rects = getGridRects(photosArr.length);
       photosArr.forEach((p,i)=>{
         const r = rects[i];
+        if(!r) return;
         const targetAR = r.w / r.h;
         let w,h,x,y;
         if (p.ar > targetAR){
@@ -780,9 +960,27 @@
       photosArr.forEach((p, idx)=>{
         const box = document.createElement('div');
         box.className = 'image-box';
+        box.dataset.pid = p.id;
         box.style.left = p.x + 'px';
         box.style.top  = p.y + 'px';
         box.style.zIndex = (++zCounter).toString();
+        box.style.position = 'absolute';
+        box.style.width = p.w + 'px';
+        box.style.height = p.h + 'px';
+
+        // inner wrapper that actually clips the image with border-radius
+        const inner = document.createElement('div');
+        inner.className = 'image-inner';
+        inner.style.width = p.w + 'px';
+        inner.style.height = p.h + 'px';
+        inner.style.borderRadius = (p.radius || 0) + 'px';
+        inner.style.overflow = 'hidden';
+        inner.style.position = 'absolute';
+        inner.style.left = '0';
+        inner.style.top = '0';
+        inner.style.boxSizing = 'border-box';
+        // apply border (uses box-sizing so border is inside size)
+        inner.style.border = (p.borderWidth || 0) + 'px solid ' + (p.borderColor || 'transparent');
 
         const img = document.createElement('img');
         img.src = p.src;
@@ -791,12 +989,21 @@
         img.style.filter = buildFilterString();
         img.style.transform = p.flipped ? 'scaleX(-1)' : 'scaleX(1)';
         img.draggable = false;
-        box.appendChild(img);
+        img.style.pointerEvents = 'none';
 
-        // Controls
+        inner.appendChild(img);
+        box.appendChild(inner);
+
+        // Controls (outside inner so not clipped)
         const del = document.createElement('button');
         del.className = 'ibtn'; del.textContent='X'; del.title='Delete';
-        del.onclick = (ev)=>{ ev.stopPropagation(); photosArr.splice(idx,1); autoPlace(); };
+        del.onclick = (ev)=>{
+          ev.stopPropagation();
+          try{ if (p._objectURL) URL.revokeObjectURL(p._objectURL); }catch(e){}
+          const index = photosArr.findIndex(it => it.id === p.id);
+          if(index>=0) photosArr.splice(index,1);
+          autoPlace();
+        };
         box.appendChild(del);
 
         const flip = document.createElement('button');
@@ -806,7 +1013,7 @@
 
         const crop = document.createElement('button');
         crop.className='crop-btn'; crop.textContent='✂'; crop.title='Crop';
-        crop.onclick = (ev)=>{ ev.stopPropagation(); openEditor(idx); };
+        crop.onclick = (ev)=>{ ev.stopPropagation(); openEditorById(p.id); };
         box.appendChild(crop);
 
         // Handles
@@ -819,6 +1026,19 @@
           poster.querySelectorAll('.image-box').forEach(b=>b.classList.remove('selected'));
           box.classList.add('selected');
           box.style.zIndex = (++zCounter).toString();
+          // sync slider with this selected image's radius & border
+          const pIndex = photosArr.findIndex(pp => pp.id === p.id);
+          if (pIndex >= 0) {
+            const r = photosArr[pIndex].radius || 0;
+            imgRadiusInput.value = r;
+            imgRadiusVal.textContent = r + 'px';
+
+            // border sync
+            const bc = photosArr[pIndex].borderColor || defaultImgBorderColor;
+            const bw = photosArr[pIndex].borderWidth || 0;
+            imgBorderColorInput.value = bc;
+            imgBorderWidthInput.value = bw;
+          }
         };
         box.addEventListener('mousedown', selectBox);
         box.addEventListener('touchstart', (e)=>{ selectBox(); }, {passive:false});
@@ -837,7 +1057,7 @@
           if(!isDragging) return;
           const pos = getXY(e);
           const transform = window.getComputedStyle(poster).transform;
-          let scale = 1; if (transform && transform !== 'none'){ const m = transform.match(/matrix\(([\d.]+)/); if (m) scale = parseFloat(m[1]); }
+          let scale = 1; if (transform && transform !== 'none'){ const m = transform.match(/matrix\(([-\d.]+)/); if (m) scale = parseFloat(m[1]); }
           const dx = (pos.x - startX) / scale; const dy = (pos.y - startY) / scale;
           p.x = sL + dx; p.y = sT + dy; box.style.left = p.x + 'px'; box.style.top = p.y + 'px';
         }
@@ -869,7 +1089,13 @@
           if (handleType==='tl'){ newW = sW - dx; newH = Math.round(newW / ar); newL = sL2 + (sW - newW); newT = sT2 + (sH - newH); }
           if (newW < 40) return;
           p.w=newW; p.h=newH; p.x=newL; p.y=newT;
-          img.style.width=p.w+'px'; img.style.height=p.h+'px'; box.style.left=p.x+'px'; box.style.top=p.y+'px';
+          // update DOM sizes
+          img.style.width = p.w+'px'; img.style.height = p.h+'px';
+          inner.style.width = p.w+'px'; inner.style.height = p.h+'px';
+          box.style.left = p.x+'px'; box.style.top = p.y+'px';
+          box.style.width = p.w+'px'; box.style.height = p.h+'px';
+          // keep border applied (inner keeps border because we set it from data)
+          inner.style.border = (p.borderWidth || 0) + 'px solid ' + (p.borderColor || 'transparent');
         });
         document.addEventListener('mouseup', ()=>{ isResizing=false; });
 
@@ -889,7 +1115,8 @@
 
           const newX = cursorX - fx * newW; const newY = cursorY - fy * newH;
           p.w = newW; p.h = newH; p.x = newX; p.y = newY;
-          img.style.width = p.w + 'px'; img.style.height = p.h + 'px'; box.style.left = p.x + 'px'; box.style.top  = p.y + 'px';
+          img.style.width = p.w + 'px'; img.style.height = p.h + 'px'; inner.style.width = p.w + 'px'; inner.style.height = p.h + 'px'; box.style.left = p.x + 'px'; box.style.top  = p.y + 'px'; box.style.width = p.w+'px'; box.style.height = p.h+'px';
+          inner.style.border = (p.borderWidth || 0) + 'px solid ' + (p.borderColor || 'transparent');
         }, { passive:false });
 
         poster.appendChild(box);
@@ -899,8 +1126,9 @@
     }
 
     /* ================== CROP EDITOR ================== */
-    function openEditor(index){
-      currentEditingIndex = index;
+    function openEditorById(id){
+      const index = photosArr.findIndex(p=>p.id===id);
+      if(index<0) return; currentEditingIndex = index;
       const cropImage = document.getElementById("cropImage");
       cropImage.src = photosArr[index].src;
 
@@ -920,7 +1148,7 @@
     function applyCrop() {
       if (!cropper) { alert("Cropper not ready yet."); return; }
       const p = photosArr[currentEditingIndex];
-      const canvas = cropper.getCroppedCanvas({ width: 540, height: 420 });
+      const canvas = cropper.getCroppedCanvas();
       if (!canvas) { alert("Could not get cropped canvas."); return; }
       const newSrc = canvas.toDataURL();
       p.src = newSrc;
@@ -929,6 +1157,7 @@
       tempImg.onload = () => {
         const newAR = tempImg.width / tempImg.height;
         p.ar = newAR;
+        // keep width, recompute height
         const newW = p.w;
         const newH = Math.round(newW / newAR);
         p.w = newW; p.h = newH;
@@ -986,6 +1215,9 @@
       clone.style.zIndex = '-1';
       clone.style.boxShadow = 'none';
       document.body.appendChild(clone);
+
+      // ensure imgs have crossOrigin set where possible
+      clone.querySelectorAll('img').forEach(img=>{ try{ img.crossOrigin='anonymous'; }catch(e){} });
 
       html2canvas(clone, {
         backgroundColor: "#ffffff",
@@ -1069,38 +1301,147 @@
       shapesArr = [];
       poster.querySelectorAll('.shape-box').forEach(s=>s.remove());
       currentShape = null;
+      // Image Radius & Border defaults
+      imgRadiusInput.value = 10; imgRadiusVal.textContent = '10px'; defaultImgRadius = 10;
+      imgBorderColorInput.value = '#000000'; imgBorderWidthInput.value = 0;
+      defaultImgBorderColor = '#000000'; defaultImgBorderWidth = 0;
       // Fit
       autoFitPoster();
     }
     document.getElementById('resetBtn').addEventListener('click', resetPoster);
 
-    /* ================== STICKERS ================== */
-    function addEmojiSticker(symbol){
-      const s=document.createElement('div'); s.className='sticker'; s.style.left='100px'; s.style.top='100px'; s.textContent=symbol;
-      const del=document.createElement('div'); del.className='sticker-del'; del.textContent='×';
-      const flip=document.createElement('div'); flip.className='sticker-flip'; flip.textContent='↔';
-      s.appendChild(del); s.appendChild(flip); poster.appendChild(s); makeDraggable(s);
-      del.addEventListener('click',(ev)=>{ ev.stopPropagation(); s.remove(); });
-      flip.addEventListener('click',()=>{ const flipped = s.dataset.flipped==="true"; s.dataset.flipped = (!flipped).toString(); s.style.transform = flipped?"scaleX(1)":"scaleX(-1)"; });
-      s.addEventListener('wheel',(e)=>{ e.preventDefault(); const cur=parseInt(window.getComputedStyle(s).fontSize,10)||64; let next=cur + (e.deltaY<0?6:-6); if(next<24) next=24; if(next>200) next=200; s.style.fontSize=next+'px'; }, {passive:false});
-    }
-    document.querySelectorAll('button[data-emoji]').forEach(btn=>{
-      btn.addEventListener('click', ()=> addEmojiSticker(btn.dataset.emoji));
+   /* ================== STICKERS ================== */
+  function addEmojiSticker(symbol) {
+    const s = document.createElement('div');
+    s.className = 'sticker';
+    s.style.left = '100px';
+    s.style.top = '100px';
+    s.textContent = symbol;
+
+    const del = document.createElement('div');
+    del.className = 'sticker-del';
+    del.textContent = '×';
+
+    const flip = document.createElement('div');
+    flip.className = 'sticker-flip';
+    flip.textContent = '↔';
+
+    s.appendChild(del);
+    s.appendChild(flip);
+    poster.appendChild(s);
+    makeDraggable(s);
+
+    // 🗑️ Delete sticker
+    del.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      s.remove();
     });
 
-    document.getElementById('stickerUpload').addEventListener('change', ()=>{
-      const f=document.getElementById('stickerUpload').files[0]; if(!f||!f.type.startsWith('image/')) return;
-      const url=URL.createObjectURL(f);
-      const w=document.createElement('div'); w.className='sticker'; w.style.left='120px'; w.style.top='120px'; w.style.fontSize='0';
-      const img=document.createElement('img'); img.src=url; img.style.width='120px'; img.style.height='auto'; img.style.pointerEvents='none';
-      const del=document.createElement('div'); del.className='sticker-del'; del.textContent='×';
-      const flip=document.createElement('div'); flip.className='sticker-flip'; flip.textContent='↔';
-      w.appendChild(img); w.appendChild(del); w.appendChild(flip); poster.appendChild(w); makeDraggable(w);
-      del.addEventListener('click',(ev)=>{ ev.stopPropagation(); w.remove(); });
-      flip.addEventListener('click',()=>{ const fl=w.dataset.flipped==="true"; w.dataset.flipped = (!fl).toString(); img.style.transform = fl?"scaleX(1)":"scaleX(-1)"; });
-      w.addEventListener('wheel',(e)=>{ e.preventDefault(); const cur=parseInt(img.style.width)||120; let next=cur + (e.deltaY<0?12:-12); if(next<40) next=40; if(next>600) next=600; img.style.width=next+'px'; }, {passive:false});
-      document.getElementById('stickerUpload').value="";
+    // ✅ Flip works on both desktop & mobile
+    function toggleStickerFlip(el) {
+      const flipped = el.dataset.flipped === "true";
+      el.dataset.flipped = (!flipped).toString();
+      el.style.transform = flipped ? "scaleX(1)" : "scaleX(-1)";
+    }
+
+    flip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleStickerFlip(s);
     });
+
+    flip.addEventListener('touchstart', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      toggleStickerFlip(s);
+    }, { passive: false });
+
+    // 🌀 Zoom sticker with mouse wheel
+    s.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const cur = parseInt(window.getComputedStyle(s).fontSize, 10) || 64;
+      let next = cur + (e.deltaY < 0 ? 6 : -6);
+      if (next < 24) next = 24;
+      if (next > 200) next = 200;
+      s.style.fontSize = next + 'px';
+    }, { passive: false });
+  }
+
+  // Add emoji stickers from sidebar
+  document.querySelectorAll('button[data-emoji]').forEach(btn => {
+    btn.addEventListener('click', () => addEmojiSticker(btn.dataset.emoji));
+  });
+
+  /* ================== IMAGE STICKERS (UPLOAD) */
+  document.getElementById('stickerUpload').addEventListener('change', () => {
+    const f = document.getElementById('stickerUpload').files[0];
+    if (!f || !f.type.startsWith('image/')) return;
+    const url = URL.createObjectURL(f);
+
+    const w = document.createElement('div');
+    w.className = 'sticker';
+    w.style.left = '120px';
+    w.style.top = '120px';
+    w.style.fontSize = '0';
+
+    const img = document.createElement('img');
+    img.src = url;
+    img.style.width = '120px';
+    img.style.height = 'auto';
+    img.style.pointerEvents = 'none';
+
+    const del = document.createElement('div');
+    del.className = 'sticker-del';
+    del.textContent = '×';
+
+    const flip = document.createElement('div');
+    flip.className = 'sticker-flip';
+    flip.textContent = '↔';
+
+    w.appendChild(img);
+    w.appendChild(del);
+    w.appendChild(flip);
+    poster.appendChild(w);
+    makeDraggable(w);
+
+    // Delete sticker
+    del.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      w.remove();
+      URL.revokeObjectURL(url); // release memory
+    });
+
+    // Flip
+    function toggleImgFlip(el) {
+      const flipped = el.dataset.flipped === "true";
+      el.dataset.flipped = (!flipped).toString();
+      const image = el.querySelector('img');
+      image.style.transform = flipped ? "scaleX(1)" : "scaleX(-1)";
+    }
+
+    flip.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleImgFlip(w);
+    });
+
+    flip.addEventListener('touchstart', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      toggleImgFlip(w);
+    }, { passive: false });
+
+    // Wheel zoom
+    w.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const cur = parseInt(img.style.width, 10) || 120;
+      let next = cur + (e.deltaY < 0 ? 12 : -12);
+      if (next < 40) next = 40;
+      if (next > 600) next = 600;
+      img.style.width = next + 'px';
+    }, { passive: false });
+
+    document.getElementById('stickerUpload').value = "";
+  });
+
 
     /* ================== QUOTES / CUSTOM TEXT ================== */
     const qFont   = document.getElementById('qFont');
@@ -1171,17 +1512,17 @@
         currentTextEl = el;
         el.style.cursor = 'text';
         el.style.userSelect = 'text';
-        el.style.whiteSpace = 'normal';
-        el.style.writingMode = 'horizontal-tb';
-        el.style.textOrientation = 'mixed';
+        el.style.whiteSpace = 'pre-wrap';
+        
+        
       });
       el.addEventListener('blur', ()=>{
         el.contentEditable = 'false';
         el.style.cursor = 'move';
         el.style.userSelect = 'none';
-        el.style.whiteSpace = 'normal';
-        el.style.writingMode = 'horizontal-tb';
-        el.style.textOrientation = 'mixed';
+        el.style.whiteSpace = 'pre-wrap';
+        
+        
         if(!el.textContent.trim()) el.textContent = 'Your quote here';
       });
 
@@ -1263,8 +1604,10 @@
     poster.addEventListener('mousedown', clearQuoteSelection);
     poster.addEventListener('touchstart', clearQuoteSelection, {passive:false});
 
-    /* ================== SHAPES (Add Rectangle/Strip) ================== */
+    /* ================== SHAPES (Fixed — solid fills only + working resize/drag) ================== */
+    const shapeTypeSelect = document.getElementById('shapeType');
     const shapeColor = document.getElementById('shapeColor');
+    const shapeStrokeColor = document.getElementById('shapeStrokeColor');
     const shapeOpacity = document.getElementById('shapeOpacity');
     const shapeRadius = document.getElementById('shapeRadius');
     const shapeStroke = document.getElementById('shapeStroke');
@@ -1285,24 +1628,117 @@
       currentShape = box;
     }
 
+    // helper to apply fill style (solid only)
+    function applyFillStyle(box) {
+      if (!box) return;
+      box.style.background = box.dataset.fillColor || shapeColor.value || '#ffffff';
+    }
+
+    // create svg shape wrapper for triangle/star/ellipse if needed
+    function createSvgForShape(type, w, h, strokeColor, strokeWidth, fill) {
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('width', w);
+      svg.setAttribute('height', h);
+      svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
+      svg.style.display = 'block';
+      svg.style.width = '100%';
+      svg.style.height = '100%';
+      svg.style.pointerEvents = 'none';
+
+      if (type === 'triangle') {
+        const points = `${w/2},0 ${w},${h} 0,${h}`;
+        const poly = document.createElementNS(ns, 'polygon');
+        poly.setAttribute('points', points);
+        poly.setAttribute('fill', fill);
+        if (strokeWidth>0) { poly.setAttribute('stroke', strokeColor); poly.setAttribute('stroke-width', strokeWidth); }
+        svg.appendChild(poly);
+      } else if (type === 'star') {
+        const cx = w/2, cy = h/2, outer = Math.min(w,h)/2, inner = outer*0.5;
+        let path = '';
+        for (let i=0;i<10;i++){
+          const angle = Math.PI/5 * i - Math.PI/2;
+          const r = i%2===0 ? outer : inner;
+          const x = cx + r * Math.cos(angle);
+          const y = cy + r * Math.sin(angle);
+          path += (i===0?'M':'L') + x + ',' + y;
+        }
+        path += 'Z';
+        const p = document.createElementNS(ns, 'path');
+        p.setAttribute('d', path);
+        p.setAttribute('fill', fill);
+        if (strokeWidth>0) { p.setAttribute('stroke', strokeColor); p.setAttribute('stroke-width', strokeWidth); }
+        svg.appendChild(p);
+      } else if (type === 'ellipse') {
+        const el = document.createElementNS(ns, 'ellipse');
+        el.setAttribute('cx', w/2);
+        el.setAttribute('cy', h/2);
+        el.setAttribute('rx', w/2);
+        el.setAttribute('ry', h/2);
+        el.setAttribute('fill', fill);
+        if (strokeWidth>0) { el.setAttribute('stroke', strokeColor); el.setAttribute('stroke-width', strokeWidth); }
+        svg.appendChild(el);
+      }
+      return svg;
+    }
+
     function addShape(){
+      const type = shapeTypeSelect.value || 'rect';
       const box = document.createElement('div');
       box.className = 'shape-box';
+      box.dataset.shapeType = type;
+
+      // ensure close button won't be clipped
+      box.style.overflow = 'visible';
+
+      // default position and size
       box.style.left = '80px';
       box.style.top  = '320px';
-      box.style.width = '360px';
-      box.style.height = '80px';
-      box.style.background = shapeColor.value;
-      box.style.opacity = (parseInt(shapeOpacity.value,10)/100).toString();
-      box.style.borderRadius = shapeRadius.value + 'px';
-      const stroke = parseInt(shapeStroke.value||'0',10);
-      if (stroke>0){ box.style.border = stroke + 'px solid rgba(0,0,0,0.6)'; }
 
-      // delete button
+      // base size (for circle we want square)
+      const baseW = 360;
+      const baseH = (type === 'circle') ? baseW : (type === 'ellipse' ? 200 : 80);
+
+      box.style.width = baseW + 'px';
+      box.style.height = baseH + 'px';
+
+      // fill data (force solid)
+      box.dataset.fillType = 'solid';
+      box.dataset.fillColor = shapeColor.value || '#ff4d6d';
+
+      // style
+      box.style.opacity = (parseInt(shapeOpacity.value,10)/100).toString();
+
+      const strokeW = parseInt(shapeStroke.value||'0',10);
+      const strokeColor = shapeStrokeColor.value || '#000';
+
+      applyFillStyle(box);
+
+      if (type === 'circle') {
+        box.style.borderRadius = '50%';
+        if (strokeW>0) box.style.border = strokeW + 'px solid ' + strokeColor;
+      } else if (type === 'rounded') {
+        box.style.borderRadius = (parseInt(shapeRadius.value,10) || 10) + 'px';
+        if (strokeW>0) box.style.border = strokeW + 'px solid ' + strokeColor;
+      } else {
+        if (strokeW>0) box.style.border = strokeW + 'px solid ' + strokeColor;
+        if (type === 'ellipse' || type === 'triangle' || type === 'star') {
+          const svg = createSvgForShape(type, baseW, baseH, strokeColor, strokeW, box.dataset.fillColor);
+          svg.style.position = 'absolute';
+          svg.style.left = '0';
+          svg.style.top = '0';
+          svg.style.width = '100%';
+          svg.style.height = '100%';
+          box.appendChild(svg);
+        }
+      }
+
+      // delete button (improved visibility)
       const del = document.createElement('div');
       del.className = 'shape-del'; del.textContent = '×'; del.title = 'Delete';
-      del.addEventListener('mousedown', ev=>ev.stopPropagation());
-      del.addEventListener('click', ev=>{ ev.stopPropagation(); box.remove(); if(currentShape===box) currentShape=null; });
+      del.addEventListener('mousedown', ev=>{ ev.stopPropagation(); ev.preventDefault(); });
+      del.addEventListener('touchstart', ev=>{ ev.stopPropagation(); ev.preventDefault(); del.click(); }, {passive:false});
+      del.addEventListener('click', ev=>{ ev.stopPropagation(); ev.preventDefault(); box.remove(); if(currentShape===box) currentShape=null; });
       box.appendChild(del);
 
       // resize handles
@@ -1324,7 +1760,7 @@
       }
       function dragMove(e){
         if(!dragging) return; const pos=getXY(e);
-        const transform = window.getComputedStyle(poster).transform; let scale=1; if(transform && transform!=='none'){ const m=transform.match(/matrix\(([\d.]+)/); if(m) scale=parseFloat(m[1]); }
+        const transform = window.getComputedStyle(poster).transform; let scale=1; if(transform && transform!=='none'){ const m=transform.match(/matrix\(([-\d.]+)/); if(m) scale=parseFloat(m[1]); }
         const dx=(pos.x-startX)/scale, dy=(pos.y-startY)/scale;
         let nx=sL+dx, ny=sT+dy;
         // clamp
@@ -1341,23 +1777,39 @@
       document.addEventListener('touchend', dragEnd);
 
       // resize
-      let resizing=false, handleType='', sW=0,sH=0,sX=0,sY=0,sL2=0,sT2=0;
+      let resizing=false, handleType2='', sW2=0,sH2=0,sX2=0,sY2=0,sL3=0,sT3=0;
       box.querySelectorAll('.shape-handle').forEach(h=>{
         h.addEventListener('mousedown', e=>{
           resizing=true;
-          handleType = [...e.target.classList].includes('tl') ? 'tl' : [...e.target.classList].includes('tr') ? 'tr' : [...e.target.classList].includes('bl') ? 'bl' : 'br';
-          sW=box.offsetWidth; sH=box.offsetHeight; sX=e.clientX; sY=e.clientY; sL2=parseFloat(box.style.left)||0; sT2=parseFloat(box.style.top)||0;
+          handleType2 = [...e.target.classList].includes('tl') ? 'tl' : [...e.target.classList].includes('tr') ? 'tr' : [...e.target.classList].includes('bl') ? 'bl' : 'br';
+          sW2=box.offsetWidth; sH2=box.offsetHeight; sX2=e.clientX; sY2=e.clientY; sL3=parseFloat(box.style.left)||0; sT3=parseFloat(box.style.top)||0;
           e.preventDefault(); e.stopPropagation();
         });
       });
       document.addEventListener('mousemove', e=>{
         if(!resizing) return;
-        const dx = e.clientX - sX; const dy = e.clientY - sY;
-        let newW=sW, newH=sH, newL=sL2, newT=sT2;
-        if(handleType==='br'){ newW=sW+dx; newH=sH+dy; }
-        if(handleType==='bl'){ newW=sW-dx; newH=sH+dy; newL=sL2+(sW-newW); }
-        if(handleType==='tr'){ newW=sW+dx; newH=sH-dy; newT=sT2+(sH-newH); }
-        if(handleType==='tl'){ newW=sW-dx; newH=sH-dy; newL=sL2+(sW-newW); newT=sT2+(sH-newH); }
+        const dx = e.clientX - sX2; const dy = e.clientY - sY2;
+        let newW=sW2, newH=sH2, newL=sL3, newT=sT3;
+        if(handleType2==='br'){ newW=sW2+dx; newH=sH2+dy; }
+        if(handleType2==='bl'){ newW=sW2-dx; newH=sH2+dy; newL=sL3+(sW2-newW); }
+        if(handleType2==='tr'){ newW=sW2+dx; newH=sH2-dy; newT=sT3+(sH2-newH); }
+        if(handleType2==='tl'){ newW=sW2-dx; newH=sH2-dy; newL=sL3+(sW2-newW); newT=sT3+(sH2-newH); }
+
+        // If circle -> force square
+        if (box.dataset.shapeType === 'circle') {
+          const size = Math.max(20, Math.min(newW, newH));
+          newW = size; newH = size;
+          if (handleType2 === 'bl' || handleType2 === 'tl') {
+            newL = sL3 + (sW2 - newW);
+          }
+          if (handleType2 === 'tl' || handleType2 === 'tr') {
+            newT = sT3 + (sH2 - newH);
+          }
+          box.style.borderRadius = '50%';
+        } else if (box.dataset.shapeType === 'rounded') {
+          box.style.borderRadius = (parseInt(shapeRadius.value,10) || 10) + 'px';
+        }
+
         if(newW<20) newW=20; if(newH<8) newH=8; if(newL<0) newL=0; if(newT<0) newT=0; if(newL+newW>1080) newW=1080-newL; if(newT+newH>1080) newH=1080-newT;
         box.style.width=newW+'px'; box.style.height=newH+'px'; box.style.left=newL+'px'; box.style.top=newT+'px';
       });
@@ -1371,97 +1823,163 @@
     shapeFrontBtn.addEventListener('click', ()=>{ if(currentShape){ currentShape.style.zIndex=++zCounter; }});
     shapeBackBtn.addEventListener('click',  ()=>{ if(currentShape){ currentShape.style.zIndex=1; }});
     delShapeBtn.addEventListener('click',   ()=>{ if(currentShape){ currentShape.remove(); currentShape=null; }});
-    shapeColor.addEventListener('input',   ()=>{ if(currentShape) currentShape.style.background = shapeColor.value; });
+    shapeColor.addEventListener('input',   ()=>{ if(currentShape) { currentShape.dataset.fillType='solid'; currentShape.dataset.fillColor=shapeColor.value; applyFillStyle(currentShape);} });
     shapeOpacity.addEventListener('input', ()=>{ if(currentShape) currentShape.style.opacity = (parseInt(shapeOpacity.value,10)/100).toString(); });
     shapeRadius.addEventListener('input',  ()=>{ if(currentShape) currentShape.style.borderRadius = shapeRadius.value + 'px'; });
     shapeStroke.addEventListener('input',  ()=>{ if(currentShape){ const s=parseInt(shapeStroke.value||'0',10); currentShape.style.border = s>0 ? (s+"px solid rgba(0,0,0,0.6)") : 'none'; }});
-	
-/* ================== MOBILE PINCH ZOOM (FINAL — FIXED + COMPATIBLE) ================== */
-function enablePinchZoom(el, type = 'photo') {
-  let startDist = 0, startW = 0, startH = 0, startFont = 0;
-  let isPinching = false;
 
-  function getDistance(touches) {
-    const [t1, t2] = touches;
-    const dx = t2.clientX - t1.clientX;
-    const dy = t2.clientY - t1.clientY;
-    return Math.hypot(dx, dy);
-  }
+    // Auto-add shape on dropdown change (immediate)
+    shapeTypeSelect.addEventListener('change', () => {
+      if (shapeTypeSelect._addTimeout) clearTimeout(shapeTypeSelect._addTimeout);
+      shapeTypeSelect._addTimeout = setTimeout(() => {
+        addShape();
+        shapeTypeSelect._addTimeout = null;
+      }, 80);
+    });
 
-  el.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 2) {
-      isPinching = true;
-      startDist = getDistance(e.touches);
+  /* ================== MOBILE PINCH ZOOM (FINAL — FIXED + COMPATIBLE + BOUNDARY SAFE) ================== */
+  function enablePinchZoom(el) {
+    let startDist = 0, startW = 0, startH = 0, startFont = 0;
+    let isPinching = false;
 
-      if (el.querySelector('img')) {
-        const img = el.querySelector('img');
-        startW = img.offsetWidth;
-        startH = img.offsetHeight;
-      } else {
-        startW = el.offsetWidth;
-        startH = el.offsetHeight;
-        startFont = parseInt(window.getComputedStyle(el).fontSize) || 64;
-      }
-      e.stopPropagation();
-      e.preventDefault();
+    function getDistance(touches) {
+      const [t1, t2] = touches;
+      const dx = t2.clientX - t1.clientX;
+      const dy = t2.clientY - t1.clientY;
+      return Math.hypot(dx, dy);
     }
-  }, { passive: false });
 
-  el.addEventListener('touchmove', (e) => {
-    if (isPinching && e.touches.length === 2) {
-      const newDist = getDistance(e.touches);
-      const scale = newDist / startDist;
+    el.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        isPinching = true;
+        startDist = getDistance(e.touches);
 
-      if (el.classList.contains('image-box')) {
-        const img = el.querySelector('img');
-        img.style.width = Math.max(40, startW * scale) + 'px';
-        img.style.height = Math.max(40, startH * scale) + 'px';
-      } else if (el.classList.contains('shape-box')) {
-        el.style.width = Math.max(20, startW * scale) + 'px';
-        el.style.height = Math.max(20, startH * scale) + 'px';
-      } else if (el.classList.contains('sticker')) {
-        const img = el.querySelector('img');
-        if (img) {
+        if (el.querySelector('img')) {
+          const img = el.querySelector('img');
+          startW = img.offsetWidth;
+          startH = img.offsetHeight;
+        } else {
+          startW = el.offsetWidth;
+          startH = el.offsetHeight;
+          startFont = parseInt(window.getComputedStyle(el).fontSize) || 64;
+        }
+        e.stopPropagation();
+        e.preventDefault();
+      }
+    }, { passive: false });
+
+    el.addEventListener('touchmove', (e) => {
+      if (isPinching && e.touches.length === 2) {
+        const newDist = getDistance(e.touches);
+        const scale = newDist / startDist;
+
+      // Update size
+        if (el.classList.contains('image-box')) {
+          const img = el.querySelector('img');
           img.style.width = Math.max(40, startW * scale) + 'px';
           img.style.height = Math.max(40, startH * scale) + 'px';
-        } else {
-          el.style.fontSize = Math.min(200, Math.max(24, startFont * scale)) + 'px';
+          // also update inner & box sizes
+          const inner = el.querySelector('.image-inner');
+          if(inner){ inner.style.width = img.style.width; inner.style.height = img.style.height; }
+          el.style.width = img.style.width; el.style.height = img.style.height;
+        } else if (el.classList.contains('shape-box')) {
+          el.style.width = Math.max(20, startW * scale) + 'px';
+          el.style.height = Math.max(20, startH * scale) + 'px';
+        } else if (el.classList.contains('sticker')) {
+          const img = el.querySelector('img');
+          if (img) {
+            img.style.width = Math.max(40, startW * scale) + 'px';
+            img.style.height = Math.max(40, startH * scale) + 'px';
+          } else {
+            el.style.fontSize = Math.min(200, Math.max(24, startFont * scale)) + 'px';
+          }
         }
+
+        // ✅ Keep inside poster boundaries
+        const posterRect = document.getElementById("poster").getBoundingClientRect();
+        const rect = el.getBoundingClientRect();
+        const offsetLeft = rect.left - posterRect.left;
+        const offsetTop = rect.top - posterRect.top;
+
+        let newLeft = parseFloat(el.style.left) || offsetLeft;
+        let newTop = parseFloat(el.style.top) || offsetTop;
+
+        const maxX = 1080 - el.offsetWidth;
+        const maxY = 1080 - el.offsetHeight;
+
+        if (newLeft < 0) newLeft = 0;
+        if (newTop < 0) newTop = 0;
+        if (newLeft > maxX) newLeft = maxX;
+        if (newTop > maxY) newTop = maxY;
+
+        el.style.left = newLeft + "px";
+        el.style.top = newTop + "px";
+
+        e.stopPropagation();
+        e.preventDefault();
       }
-      e.stopPropagation();
-      e.preventDefault();
-    }
-  }, { passive: false });
+    }, { passive: false });
 
-  el.addEventListener('touchend', (e) => {
-    if (e.touches.length < 2) {
+    el.addEventListener('touchend', (e) => {
+      if (e.touches.length < 2) {
+        isPinching = false;
+        startDist = 0;
+      }
+    });
+  }
+
+  /* ✅ Watch for new elements added to poster (photos, shapes, stickers) */
+  const pinchObserver = new MutationObserver(() => {
+    document.querySelectorAll('.image-box, .shape-box, .sticker').forEach(el => {
+      if (!el.dataset.pinchEnabled) {
+        enablePinchZoom(el);
+        el.dataset.pinchEnabled = 'true';
+      }
+    });
+  });
+  pinchObserver.observe(document.getElementById('poster'), { childList: true, subtree: true });
+
+  /* ✅ Pinch zoom for poster text elements (Event / Branch / Date) */
+  function enableTextPinchZoom(el) {
+    let startDist = 0;
+    let startFont = 0;
+    let isPinching = false;
+
+    const getDistance = (touches) => {
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.hypot(dx, dy);
+    };
+
+    el.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        isPinching = true;
+        startDist = getDistance(e.touches);
+        startFont = parseFloat(window.getComputedStyle(el).fontSize) || 24;
+      }
+    }, { passive: false });
+
+    el.addEventListener('touchmove', (e) => {
+      if (isPinching && e.touches.length === 2) {
+        e.preventDefault();
+        const scale = getDistance(e.touches) / startDist;
+        const newFont = Math.min(200, Math.max(10, startFont * scale));
+        el.style.fontSize = newFont + "px";
+      }
+    }, { passive: false });
+
+    el.addEventListener('touchend', () => {
       isPinching = false;
-      startDist = 0;
-    }
+    });
+  }
+
+  // Attach pinch-zoom to title / branch / date
+  ["#title", "#branch", "#dateText"].forEach(sel => {
+    const el = document.querySelector(sel);
+    if (el) enableTextPinchZoom(el);
   });
-}
-
-/* Observe new poster elements for pinch */
-const pinchObserver = new MutationObserver(() => {
-  document.querySelectorAll('.image-box, .shape-box, .sticker').forEach(el => {
-    if (!el.dataset.pinchEnabled) {
-      enablePinchZoom(el);
-      el.dataset.pinchEnabled = 'true';
-    }
-  });
-});
-pinchObserver.observe(document.getElementById('poster'), { childList: true, subtree: true });
-
-
 
 
   </script>
 </body>
 </html>
-
-
-
-
-
-
-
