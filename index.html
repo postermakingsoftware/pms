@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PMS — Patched: Radius + Shapes + BG Remove + Shape UX Fixes</title>
+  <title>PMS — Poster Making Software </title>
 
   <!-- Libraries -->
   <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css">
@@ -781,12 +781,23 @@ document.addEventListener('keydown', (e) => {
     try { makeDraggable(w); } catch(e){}
     try { enablePinchZoom(w); } catch(e){}
 
-    // Delete sticker
-    del.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      w.remove();
-      URL.revokeObjectURL(url);
-    });
+  // ---- MOBILE + DESKTOP SAFE DELETE HANDLER ----
+function deleteSticker(ev) {
+  ev.stopPropagation();
+  ev.preventDefault();
+  if (w) w.remove();
+}
+
+// mobile touch delete (immediate)
+del.addEventListener("touchstart", function(ev) {
+  deleteSticker(ev);
+}, { passive: false });
+
+// desktop click delete
+del.addEventListener("click", function(ev) {
+  deleteSticker(ev);
+}, { passive: false });
+
 
     // Flip image sticker
     function toggleImgFlip(el) {
