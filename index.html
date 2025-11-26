@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PMS — Poster Making Software</title>
+  <title>PMS — Patched: Radius + Shapes + BG Remove + Shape UX Fixes</title>
 
   <!-- Libraries -->
   <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css">
@@ -217,6 +217,68 @@
   #title, #branch, #dateText {
     transition: font-size 0.2s ease;
   }
+  
+  .sticker-gallery {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.sticker-thumb-btn {
+  border: none;
+  background: transparent;
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.sticker-thumb-btn img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  pointer-events: none;
+  border-radius: 6px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.15);
+}
+
+  /* Dropdown styles */
+.sticker-dropdown { width:100%; }
+#stickerToggle {
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+}
+.sticker-panel {
+  margin-top:8px;
+  background: #fff;
+  padding:8px;
+  border-radius:10px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+  color: #111;
+}
+
+/* thumbnails inside dropdown */
+.sticker-panel-row { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-start; }
+.sticker-thumb-btn {
+  border: none;
+  background: transparent;
+  padding: 4px;
+  cursor: pointer;
+  border-radius: 8px;
+}
+.sticker-thumb-btn img {
+  width:44px;
+  height:44px;
+  object-fit:contain;
+  pointer-events:none;
+  border-radius:6px;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+}
+
+  
   </style>
 </head>
 <body>
@@ -357,19 +419,50 @@
     </div>
 
     <!-- 🧁 Stickers -->
-    <div class="section">
-      <h3>🧁 Stickers</h3>
-      <div class="row">
-        <button class="ghost" data-emoji="💐">💐</button>
-        <button class="ghost" data-emoji="🏆">🏆</button>
-        <button class="ghost" data-emoji="⭐">⭐</button>
-        <button class="ghost" data-emoji="🎊">🎊</button>
-      </div>
-      <div class="row full" style="margin-top:8px">
-        <input type="file" id="stickerUpload" accept="image/*">
-      </div>
-      <div class="hint">Tip: Mouse wheel on sticker to resize</div>
+  <!-- Real PNG Sticker Gallery -->
+<!-- Sticker dropdown (paste inside the 🧁 Stickers section) -->
+<div class="sticker-dropdown">
+  <button id="stickerToggle" class="ghost" type="button" aria-expanded="false">📁 Stickers ▾</button>
+  <div id="stickerPanel" class="sticker-panel" hidden>
+    <div class="sticker-panel-row">
+      <!-- Thumbnails call existing function addImageStickerFromUrl(url) -->
+      <button class="sticker-thumb-btn" type="button" onclick="addImageStickerFromUrl('https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/trophy.png')">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/trophy.png" alt="trophy">
+      </button>
+	  
+	  <button class="sticker-thumb-btn" type="button" onclick="addImageStickerFromUrl('https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/congratulations.png')">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/congratulations.png" alt="congratulations">
+      </button>
+	  
+	  <button class="sticker-thumb-btn" type="button" onclick="addImageStickerFromUrl('https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/flowerbukey2.png')">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/flowerbukey2.png" alt="flowerbukey">
+      </button>
+	  
+	  <button class="sticker-thumb-btn" type="button" onclick="addImageStickerFromUrl('https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/AD.png')">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/AD.png" alt="admissions">
+      </button>
+	  
+	   <button class="sticker-thumb-btn" type="button" onclick="addImageStickerFromUrl('https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/Cel.png')">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/Cel.png" alt="celebrations">
+      </button>
+
+
+    <!-- Upload sticker (hidden input + visible button) -->
+<input id="stickerUpload" type="file" accept="image/*" style="display:none" />
+<div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+  <button id="uploadStickerBtn" class="primary" type="button">Upload Sticker</button>
+  
+</div>
+
+
+    
+    <div style="margin-top:8px;display:flex; gap:8px; align-items:center;">
+      <button class="danger" id="stickerPanelClose">Close</button>
     </div>
+  </div>
+</div>
+
+
 
     <!-- 🧱 Add Shape (Rectangles/Strips + extended) -->
     <div class="section">
@@ -605,9 +698,207 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
   <script>
+  // Toggle dropdown behavior + click-outside & ESC close
+const stickerToggle = document.getElementById('stickerToggle');
+const stickerPanel = document.getElementById('stickerPanel');
+const stickerPanelClose = document.getElementById('stickerPanelClose');
+
+function openStickerPanel(){
+  stickerPanel.hidden = false;
+  stickerToggle.setAttribute('aria-expanded','true');
+}
+function closeStickerPanel(){
+  stickerPanel.hidden = true;
+  stickerToggle.setAttribute('aria-expanded','false');
+}
+stickerToggle.addEventListener('click', (e) => {
+  if (stickerPanel.hidden) openStickerPanel(); else closeStickerPanel();
+});
+
+// close button inside
+stickerPanelClose && stickerPanelClose.addEventListener('click', closeStickerPanel);
+
+// click outside to close
+document.addEventListener('click', (e) => {
+  if (!stickerPanel) return;
+  const inside = e.target.closest('.sticker-panel') || e.target.closest('#stickerToggle');
+  if (!inside) closeStickerPanel();
+});
+
+// ESC to close
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeStickerPanel();
+});
+// Hook upload button -> hidden input, and safely handle change
+(function(){
+  const uploadBtn = document.getElementById('uploadStickerBtn');
+  const stickerUpload = document.getElementById('stickerUpload');
+
+  if (uploadBtn && stickerUpload) {
+    uploadBtn.addEventListener('click', () => stickerUpload.click());
+  }
+
+  if (!stickerUpload) {
+    console.warn('stickerUpload input not found; image-sticker upload disabled.');
+    return;
+  }
+
+  stickerUpload.addEventListener('change', () => {
+    const f = stickerUpload.files[0];
+    if (!f || !f.type.startsWith('image/')) {
+      stickerUpload.value = "";
+      return;
+    }
+    const url = URL.createObjectURL(f);
+
+    const w = document.createElement('div');
+    w.className = 'sticker';
+    w.style.left = '120px';
+    w.style.top = '120px';
+    w.style.fontSize = '0';
+
+    const img = document.createElement('img');
+    img.src = url;
+    img.style.width = '120px';
+    img.style.height = 'auto';
+    img.style.pointerEvents = 'none';
+    img.draggable = false;
+
+    const del = document.createElement('div');
+    del.className = 'sticker-del';
+    del.textContent = '×';
+
+    const flip = document.createElement('div');
+    flip.className = 'sticker-flip';
+    flip.textContent = '↔';
+
+    w.appendChild(img);
+    w.appendChild(del);
+    w.appendChild(flip);
+    poster.appendChild(w);
+
+    // make draggable & pinchable if helpers exist
+    try { makeDraggable(w); } catch(e){}
+    try { enablePinchZoom(w); } catch(e){}
+
+    // Delete sticker
+    del.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      w.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    // Flip image sticker
+    function toggleImgFlip(el) {
+      const flipped = el.dataset.flipped === "true";
+      el.dataset.flipped = (!flipped).toString();
+      const image = el.querySelector('img');
+      image.style.transform = flipped ? "scaleX(1)" : "scaleX(-1)";
+    }
+    flip.addEventListener('click', (e) => { e.stopPropagation(); toggleImgFlip(w); });
+    flip.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); toggleImgFlip(w); }, { passive:false });
+
+    // Wheel zoom
+    w.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const cur = parseInt(img.style.width, 10) || 120;
+      let next = cur + (e.deltaY < 0 ? 12 : -12);
+      if (next < 40) next = 40;
+      if (next > 800) next = 800;
+      img.style.width = next + 'px';
+    }, { passive:false });
+
+    // reset file input
+    stickerUpload.value = "";
+  });
+})();
+
     /* ================== STATE ================== */
     let cropper = null, currentEditingIndex = -1;
     const poster = document.getElementById('poster');
+	// Replace your existing addImageStickerFromUrl with this version.
+// This version DOES NOT auto-close the sticker panel when a thumbnail is clicked.
+// If you want auto-close behavior for specific thumbnails, call addImageStickerFromUrl(url, { autoClose: true })
+
+function addImageStickerFromUrl(url, opts = {}) {
+  if (!url) return;
+  const autoClose = !!opts.autoClose; // default false -> keep panel open
+
+  const w = document.createElement('div');
+  w.className = 'sticker';
+  w.style.left = '120px';
+  w.style.top = '120px';
+  w.style.fontSize = '0'; // using an img inside
+
+  const img = document.createElement('img');
+  img.src = url;
+  img.alt = 'sticker';
+  img.draggable = false;
+  img.style.pointerEvents = 'none';
+  img.style.width = '120px';
+  img.style.height = 'auto';
+  img.style.display = 'block';
+
+  const del = document.createElement('div');
+  del.className = 'sticker-del';
+  del.textContent = '×';
+
+  const flip = document.createElement('div');
+  flip.className = 'sticker-flip';
+  flip.textContent = '↔';
+
+  w.appendChild(img);
+  w.appendChild(del);
+  w.appendChild(flip);
+  poster.appendChild(w);
+
+  // make draggable (uses your makeDraggable)
+  try { makeDraggable(w); } catch (e) { console.warn('makeDraggable missing', e); }
+
+  // enable pinch zoom if available
+  try { enablePinchZoom(w); } catch (e) { /* ignore */ }
+
+  // delete
+  del.addEventListener('click', (ev) => {
+    ev.stopPropagation();
+    w.remove();
+  });
+
+  // flip image sticker
+  function toggleImgFlip(el) {
+    const flipped = el.dataset.flipped === "true";
+    el.dataset.flipped = (!flipped).toString();
+    const image = el.querySelector('img');
+    if (image) image.style.transform = flipped ? "scaleX(1)" : "scaleX(-1)";
+  }
+  flip.addEventListener('click', (e) => { e.stopPropagation(); toggleImgFlip(w); });
+  flip.addEventListener('touchstart', (e) => { e.stopPropagation(); e.preventDefault(); toggleImgFlip(w); }, { passive:false });
+
+  // wheel zoom
+  w.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const cur = parseInt(img.style.width, 10) || 120;
+    let next = cur + (e.deltaY < 0 ? 12 : -12);
+    if (next < 40) next = 40;
+    if (next > 800) next = 800;
+    img.style.width = next + 'px';
+  }, { passive:false });
+
+  // IMPORTANT: Do NOT auto-close sticker panel here.
+  // If a specific thumbnail should close the panel, call:
+  // addImageStickerFromUrl(url, { autoClose: true })
+  if (autoClose) {
+    try {
+      const sp = document.getElementById('stickerPanel');
+      const st = document.getElementById('stickerToggle');
+      if (sp && !sp.hidden) {
+        sp.hidden = true;
+        if (st) st.setAttribute('aria-expanded','false');
+      }
+    } catch(e){ /* ignore */ }
+  }
+}
+
     const title  = document.getElementById('title');
     const branch = document.getElementById('branch');
     const dateText = document.getElementById('dateText');
