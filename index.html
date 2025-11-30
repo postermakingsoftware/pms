@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PMS — Poster Making Software</title>
+  <title>PMS — Patched: Radius + Shapes + BG Remove + Shape UX Fixes</title>
 
   <!-- Libraries -->
   <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css">
@@ -309,21 +309,6 @@
   border-radius: 6px; /* optional */
   background: rgba(255,255,255,0.02); /* tiny bg to help contrast on complex images */
 }
-
-
-/* ---------- Mobile-friendly delete targets ---------- */
-/* ensure delete buttons reliably receive touch/pointer events */
-.sticker .sticker-del,
-.quote-box .txt-del,
-.shape-box .shape-del,
-.image-box .ibtn,
-.image-box .ibtn * {
-  pointer-events: auto !important;
-  touch-action: manipulation; /* allows quick taps while avoiding accidental gestures */
-  -webkit-tap-highlight-color: rgba(0,0,0,0.12);
-  z-index: 99999;
-}
-
 
 
   </style>
@@ -2354,114 +2339,8 @@ if (wm) {
     if (el) enableTextPinchZoom(el);
   });
 
-/* ==================== ROBUST MOBILE+DESKTOP DELETE HANDLER ====================
-   Works on pointer-capable browsers, falls back to touchend and click capture.
-   Targets: .sticker-del, .txt-del, .shape-del, .ibtn (image delete button)
-   Placed with capture:true & passive:false to stop parent drag handlers.
-========================================================================== */
 
-(function(){
-  const selectors = ['.sticker-del', '.txt-del', '.shape-del', '.ibtn'];
+  </script>
 
-  function findDeleteTarget(target) {
-    if (!target) return null;
-    return selectors.map(s => target.closest ? target.closest(s) : null).find(x => !!x) || null;
-  }
-
-  // Unified delete action - given the delete button element, find its owner and remove
-  function doDelete(delBtn) {
-    if (!delBtn) return;
-    // sticker / quote / shape / image-box
-    const sticker = delBtn.closest('.sticker');
-    if (sticker) {
-      // smooth animation then remove
-      sticker.style.transition = 'opacity 140ms ease, transform 140ms ease';
-      sticker.style.opacity = '0';
-      sticker.style.transform = 'scale(0.92)';
-      setTimeout(()=> { if (sticker && sticker.parentNode) sticker.remove(); }, 140);
-      return;
-    }
-    const quote = delBtn.closest('.quote-box');
-    if (quote) {
-      quote.style.transition = 'opacity 140ms ease';
-      quote.style.opacity = '0';
-      setTimeout(()=> { if (quote && quote.parentNode) quote.remove(); }, 140);
-      return;
-    }
-    const shape = delBtn.closest('.shape-box');
-    if (shape) {
-      shape.style.transition = 'opacity 140ms ease, transform 140ms ease';
-      shape.style.opacity = '0';
-      shape.style.transform = 'scale(0.98)';
-      setTimeout(()=> { if (shape && shape.parentNode) shape.remove(); }, 140);
-      return;
-    }
-    const imageBoxBtn = delBtn.closest('.image-box');
-    if (imageBoxBtn) {
-      // find pid and remove from photosArr if present
-      const pid = imageBoxBtn.dataset && imageBoxBtn.dataset.pid;
-      if (pid && window.photosArr) {
-        const idx = photosArr.findIndex(p=>p.id===pid);
-        if (idx>=0) photosArr.splice(idx,1);
-      }
-      imageBoxBtn.style.transition = 'opacity 140ms ease, transform 140ms ease';
-      imageBoxBtn.style.opacity = '0';
-      imageBoxBtn.style.transform = 'scale(0.96)';
-      setTimeout(()=> { if (imageBoxBtn && imageBoxBtn.parentNode) imageBoxBtn.remove(); }, 140);
-      return;
-    }
-  }
-
-  // Pointerdown (best) - capture phase
-  document.addEventListener('pointerdown', function(e){
-    const del = findDeleteTarget(e.target);
-    if (!del) return;
-    // prevent any drag/gesture handlers
-    try { e.stopImmediatePropagation(); } catch(_) {}
-    e.stopPropagation();
-    e.preventDefault();
-    doDelete(del);
-  }, { capture: true, passive: false });
-
-  // Fallback for older browsers: touchend (capture)
-  document.addEventListener('touchend', function(e){
-    // only consider single-finger taps (avoid interfering with pinch end)
-    if (e.changedTouches && e.changedTouches.length > 1) return;
-    const touch = e.changedTouches && e.changedTouches[0];
-    if (!touch) return;
-    // element at touch end coordinates
-    const el = document.elementFromPoint(touch.clientX, touch.clientY);
-    const del = findDeleteTarget(el);
-    if (!del) return;
-    // prevent parent handlers which might start on touchstart
-    try { e.stopImmediatePropagation(); } catch(_) {}
-    e.stopPropagation();
-    e.preventDefault();
-    doDelete(del);
-  }, { capture: true, passive: false });
-
-  // Final fallback: click in capture phase (desktop & some mobile)
-  document.addEventListener('click', function(e){
-    const del = findDeleteTarget(e.target);
-    if (!del) return;
-    e.stopPropagation();
-    // don't call preventDefault for accessibility (allow focus change), but stop drag handlers
-    try { e.stopImmediatePropagation(); } catch(_) {}
-    doDelete(del);
-  }, { capture: true });
-
-  // Safety: when new nodes are added, ensure the delete buttons have pointer cursor
-  const posterEl = document.getElementById('poster');
-  if (posterEl) {
-    const observer = new MutationObserver(() => {
-      posterEl.querySelectorAll('.sticker-del, .txt-del, .shape-del, .ibtn').forEach(b=>{
-        b.style.pointerEvents = 'auto';
-        b.style.cursor = 'pointer';
-      });
-    });
-    observer.observe(posterEl, { childList:true, subtree:true });
-  }
-})();
-  </script>  
 </body>
 </html>
