@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PMS — Poster Making Software </title>
+  <title>PMS — Poster Making Software</title>
 
   <!-- Libraries -->
   <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css">
@@ -277,8 +277,55 @@
   border-radius:6px;
   box-shadow: 0 3px 8px rgba(0,0,0,0.12);
 }
+/* Watermark: centered, diagonal, and visible on white/light backgrounds */
+#wm {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) rotate(-25deg);
+  font-size: 100px;              /* adjust size as needed */
+  font-weight: 200;
+  font-family:Impact;
+  letter-spacing: 1px;
+  pointer-events: none;
+  user-select: none;
+  z-index: 9998;
 
-  
+  /* Visible on white: use dark translucent color + subtle shadow */
+  color: rgba(0,0,0,0.18);
+  opacity: 0.5;
+
+  /* subtle outline to make it legible on both dark and light backgrounds */
+  text-shadow:
+    0 1px 0 rgba(255,255,255,0.25),
+    0 6px 18px rgba(0,0,0,0.08);
+
+  /* do NOT rely on mix-blend-mode (html2canvas is inconsistent) */
+  mix-blend-mode: normal;
+  -webkit-font-smoothing: antialiased;
+  transform-origin: center center;
+  white-space: nowrap;
+  padding: 6px 10px;
+  border-radius: 6px; /* optional */
+  background: rgba(255,255,255,0.02); /* tiny bg to help contrast on complex images */
+}
+
+
+/* ---------- Mobile-friendly delete targets ---------- */
+/* ensure delete buttons reliably receive touch/pointer events */
+.sticker .sticker-del,
+.quote-box .txt-del,
+.shape-box .shape-del,
+.image-box .ibtn,
+.image-box .ibtn * {
+  pointer-events: auto !important;
+  touch-action: manipulation; /* allows quick taps while avoiding accidental gestures */
+  -webkit-tap-highlight-color: rgba(0,0,0,0.12);
+  z-index: 99999;
+}
+
+
+
   </style>
 </head>
 <body>
@@ -438,13 +485,24 @@
         <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/flowerbukey2.png" alt="flowerbukey">
       </button>
 	  
-	  <button class="sticker-thumb-btn" type="button" onclick="addImageStickerFromUrl('https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/AD.png')">
-        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/AD.png" alt="admissions">
+	  <button class="sticker-thumb-btn" type="button" onclick="addImageStickerFromUrl('https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/trophy.png')">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/trophy.png" alt="trophy">
       </button>
 	  
-	   <button class="sticker-thumb-btn" type="button" onclick="addImageStickerFromUrl('https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/Cel.png')">
-        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/Cel.png" alt="celebrations">
+	  <button class="sticker-thumb-btn" type="button" onclick="addImageStickerFromUrl('https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/trophy.png')">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/trophy.png" alt="trophy">
       </button>
+	  
+	  <button class="sticker-thumb-btn" type="button" onclick="addImageStickerFromUrl('https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/trophy.png')">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/trophy.png" alt="trophy">
+      </button>
+
+      
+
+
+
+
+
 
 
     <!-- Upload sticker (hidden input + visible button) -->
@@ -679,7 +737,20 @@
         <div id="title">Event Name</div>
         <div id="branch">Branch Name</div>
         <div id="dateText"></div>
+		
+<!-- centered diagonal watermark -->
+<div id="wm">Sri Chaitanya School</div>
+
+
+		
+		
       </div>
+	  
+
+
+	  
+	  
+	  
     </div>
   </main>
 
@@ -781,23 +852,12 @@ document.addEventListener('keydown', (e) => {
     try { makeDraggable(w); } catch(e){}
     try { enablePinchZoom(w); } catch(e){}
 
-  // ---- MOBILE + DESKTOP SAFE DELETE HANDLER ----
-function deleteSticker(ev) {
-  ev.stopPropagation();
-  ev.preventDefault();
-  if (w) w.remove();
-}
-
-// mobile touch delete (immediate)
-del.addEventListener("touchstart", function(ev) {
-  deleteSticker(ev);
-}, { passive: false });
-
-// desktop click delete
-del.addEventListener("click", function(ev) {
-  deleteSticker(ev);
-}, { passive: false });
-
+    // Delete sticker
+    del.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      w.remove();
+      URL.revokeObjectURL(url);
+    });
 
     // Flip image sticker
     function toggleImgFlip(el) {
@@ -1507,6 +1567,10 @@ function addImageStickerFromUrl(url, opts = {}) {
     /* ================== DOWNLOAD (fixed blink/scale) ================== */
     function downloadPoster() {
       const posterEl = document.getElementById('poster');
+	  
+	
+
+	  
 
       const clone = posterEl.cloneNode(true);
       clone.style.transform = 'none';
@@ -1517,6 +1581,15 @@ function addImageStickerFromUrl(url, opts = {}) {
       clone.style.zIndex = '-1';
       clone.style.boxShadow = 'none';
       document.body.appendChild(clone);
+	  
+const wm = clone.querySelector('#wm');
+if (wm) {
+  wm.style.display = 'block';
+  wm.style.opacity = "0.15";
+  wm.style.color = "rgba(0,0,0,0.20)";
+  wm.style.textShadow = "0 1px 2px rgba(0,0,0,0.1)";
+}
+
 
       // ensure imgs have crossOrigin set where possible
       clone.querySelectorAll('img').forEach(img=>{ try{ img.crossOrigin='anonymous'; }catch(e){} });
@@ -2281,7 +2354,114 @@ function addImageStickerFromUrl(url, opts = {}) {
     if (el) enableTextPinchZoom(el);
   });
 
+/* ==================== ROBUST MOBILE+DESKTOP DELETE HANDLER ====================
+   Works on pointer-capable browsers, falls back to touchend and click capture.
+   Targets: .sticker-del, .txt-del, .shape-del, .ibtn (image delete button)
+   Placed with capture:true & passive:false to stop parent drag handlers.
+========================================================================== */
 
-  </script>
+(function(){
+  const selectors = ['.sticker-del', '.txt-del', '.shape-del', '.ibtn'];
+
+  function findDeleteTarget(target) {
+    if (!target) return null;
+    return selectors.map(s => target.closest ? target.closest(s) : null).find(x => !!x) || null;
+  }
+
+  // Unified delete action - given the delete button element, find its owner and remove
+  function doDelete(delBtn) {
+    if (!delBtn) return;
+    // sticker / quote / shape / image-box
+    const sticker = delBtn.closest('.sticker');
+    if (sticker) {
+      // smooth animation then remove
+      sticker.style.transition = 'opacity 140ms ease, transform 140ms ease';
+      sticker.style.opacity = '0';
+      sticker.style.transform = 'scale(0.92)';
+      setTimeout(()=> { if (sticker && sticker.parentNode) sticker.remove(); }, 140);
+      return;
+    }
+    const quote = delBtn.closest('.quote-box');
+    if (quote) {
+      quote.style.transition = 'opacity 140ms ease';
+      quote.style.opacity = '0';
+      setTimeout(()=> { if (quote && quote.parentNode) quote.remove(); }, 140);
+      return;
+    }
+    const shape = delBtn.closest('.shape-box');
+    if (shape) {
+      shape.style.transition = 'opacity 140ms ease, transform 140ms ease';
+      shape.style.opacity = '0';
+      shape.style.transform = 'scale(0.98)';
+      setTimeout(()=> { if (shape && shape.parentNode) shape.remove(); }, 140);
+      return;
+    }
+    const imageBoxBtn = delBtn.closest('.image-box');
+    if (imageBoxBtn) {
+      // find pid and remove from photosArr if present
+      const pid = imageBoxBtn.dataset && imageBoxBtn.dataset.pid;
+      if (pid && window.photosArr) {
+        const idx = photosArr.findIndex(p=>p.id===pid);
+        if (idx>=0) photosArr.splice(idx,1);
+      }
+      imageBoxBtn.style.transition = 'opacity 140ms ease, transform 140ms ease';
+      imageBoxBtn.style.opacity = '0';
+      imageBoxBtn.style.transform = 'scale(0.96)';
+      setTimeout(()=> { if (imageBoxBtn && imageBoxBtn.parentNode) imageBoxBtn.remove(); }, 140);
+      return;
+    }
+  }
+
+  // Pointerdown (best) - capture phase
+  document.addEventListener('pointerdown', function(e){
+    const del = findDeleteTarget(e.target);
+    if (!del) return;
+    // prevent any drag/gesture handlers
+    try { e.stopImmediatePropagation(); } catch(_) {}
+    e.stopPropagation();
+    e.preventDefault();
+    doDelete(del);
+  }, { capture: true, passive: false });
+
+  // Fallback for older browsers: touchend (capture)
+  document.addEventListener('touchend', function(e){
+    // only consider single-finger taps (avoid interfering with pinch end)
+    if (e.changedTouches && e.changedTouches.length > 1) return;
+    const touch = e.changedTouches && e.changedTouches[0];
+    if (!touch) return;
+    // element at touch end coordinates
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    const del = findDeleteTarget(el);
+    if (!del) return;
+    // prevent parent handlers which might start on touchstart
+    try { e.stopImmediatePropagation(); } catch(_) {}
+    e.stopPropagation();
+    e.preventDefault();
+    doDelete(del);
+  }, { capture: true, passive: false });
+
+  // Final fallback: click in capture phase (desktop & some mobile)
+  document.addEventListener('click', function(e){
+    const del = findDeleteTarget(e.target);
+    if (!del) return;
+    e.stopPropagation();
+    // don't call preventDefault for accessibility (allow focus change), but stop drag handlers
+    try { e.stopImmediatePropagation(); } catch(_) {}
+    doDelete(del);
+  }, { capture: true });
+
+  // Safety: when new nodes are added, ensure the delete buttons have pointer cursor
+  const posterEl = document.getElementById('poster');
+  if (posterEl) {
+    const observer = new MutationObserver(() => {
+      posterEl.querySelectorAll('.sticker-del, .txt-del, .shape-del, .ibtn').forEach(b=>{
+        b.style.pointerEvents = 'auto';
+        b.style.cursor = 'pointer';
+      });
+    });
+    observer.observe(posterEl, { childList:true, subtree:true });
+  }
+})();
+  </script>  
 </body>
 </html>
