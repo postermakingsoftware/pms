@@ -2339,8 +2339,28 @@ if (wm) {
     if (el) enableTextPinchZoom(el);
   });
 
+/* ===== 100% MOBILE STICKER DELETE FIX (FINAL) ===== */
+
+document.addEventListener("touchstart", function (e) {
+  const del = e.target.closest(".sticker-del");
+  if (!del) return;
+
+  e.preventDefault();
+  e.stopPropagation();
+
+  const sticker = del.closest(".sticker");
+  if (!sticker) return;
+
+  // Smooth delete animation
+  sticker.style.transition = "opacity 120ms ease, transform 120ms ease";
+  sticker.style.opacity = "0";
+  sticker.style.transform = "scale(0.85)";
+
+  setTimeout(() => sticker.remove(), 120);
+}, { passive: false, capture: true });
 
   </script>
+
 
 </body>
 </html>
