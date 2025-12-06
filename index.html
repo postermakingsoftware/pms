@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>PMS — Patched: Radius + Shapes + BG Remove + Shape UX Fixes</title>
+  <title>PMS — Poster Making Software</title>
 
   <!-- Libraries -->
   <link rel="stylesheet" href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css">
@@ -13,6 +13,7 @@
   <!-- BodyPix / TensorFlow (for client-side BG removal - unused here but kept) -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.8.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.0.5/dist/body-pix.min.js"></script>
+<script src="undo-redo.js" defer></script>
 
   <style>
     :root{
@@ -320,7 +321,20 @@
   <aside class="sidebar">
     <div class="brand">
       <div class="dot"></div><h1>PMS</h1>
+
     </div>
+	
+	<div class="section" id="historySection">
+      <h3>↩️ Undo / Redo</h3>
+      <div id="row">
+        <button class="ghost" id="undoBtn" disabled>⟲ Undo</button>
+        <button class="ghost" id="redoBtn" disabled>⟳ Redo</button>
+      </div>
+     
+    </div>
+
+	
+	
 
     <!-- 🎨 Frame -->
     <div class="section">
@@ -2359,8 +2373,633 @@ document.addEventListener("touchstart", function (e) {
 }, { passive: false, capture: true });
 
 
+
+/* =====================================================================
+   🌐 GLOBAL UNDO / REDO (FULL)
+   Covers:
+   - poster bg, frame, filters
+   - title / branch / date
+   - photosArr (images) + .image-box DOM (pos, size, radius)
+   - .quote-box (custom text)
+   - .sticker (emoji + image)
+   - .shape-box (shapes)
+   ===================================================================== */
+
+window.addEventListener("load", function () {
+  (function () {
+    const MAX_HISTORY = 20;
+    const historyStack = [];
+    let historyIndex = -1;
+    let isRestoring = false;
+    let snapshotTimer = null;
+
+    const poster  = document.getElementById("poster");
+    const undoBtn = document.getElementById("undoBtn");
+    const redoBtn = document.getElementById("redoBtn");
+
+    if (!poster || !undoBtn || !redoBtn) {
+      console.warn("Undo/Redo: poster/undoBtn/redoBtn not found");
+      return;
+    }
+
+    function updateHistoryButtons() {
+      undoBtn.disabled = historyIndex <= 0;
+      redoBtn.disabled =
+        historyIndex < 0 || historyIndex >= historyStack.length - 1;
+    }
+
+    // ===== SNAPSHOT CREATION =====
+    function createSnapshot(label) {
+      try {
+        const titleEl  = document.getElementById("title");
+        const branchEl = document.getElementById("branch");
+        const dateEl   = document.getElementById("dateText");
+
+        // photos main state array
+        const photosClone = JSON.parse(JSON.stringify(photosArr || []));
+
+        // image-box DOM (position / size / transform / radius)
+        const images = [...poster.querySelectorAll(".image-box")].map((box) => {
+          const boxStyle = window.getComputedStyle(box);
+          const img = box.querySelector("img");
+          const imgStyle = img ? window.getComputedStyle(img) : null;
+
+          return {
+            src: img ? img.getAttribute("src") : "",
+            left: box.style.left || boxStyle.left,
+            top: box.style.top || boxStyle.top,
+            width: box.style.width || boxStyle.width,
+            height: box.style.height || boxStyle.height,
+            transform: box.style.transform || boxStyle.transform,
+            zIndex: box.style.zIndex || boxStyle.zIndex || "",
+            boxRadius: box.style.borderRadius || boxStyle.borderRadius || "",
+            imgRadius: (img && (img.style.borderRadius || (imgStyle && imgStyle.borderRadius))) || ""
+          };
+        });
+
+        // quotes
+        const quotes = [...poster.querySelectorAll(".quote-box")].map((el) => {
+          const cs = window.getComputedStyle(el);
+          return {
+            text: el.textContent,
+            left: el.style.left,
+            top: el.style.top,
+            transform: el.style.transform,
+            fontFamily: cs.fontFamily,
+            fontSize: cs.fontSize,
+            color: cs.color,
+            fontWeight: cs.fontWeight,
+            fontStyle: cs.fontStyle,
+            textAlign: cs.textAlign,
+          };
+        });
+
+        // stickers (emoji + image)
+        const stickers = [...poster.querySelectorAll(".sticker")].map((el) => {
+          const style = window.getComputedStyle(el);
+          const left = el.style.left;
+          const top = el.style.top;
+          const zIndex = el.style.zIndex || style.zIndex || "";
+          const img = el.querySelector("img");
+          let flipped = false;
+          const t = style.transform || "";
+          if (t.includes("scaleX(-1)")) flipped = true;
+          if (el.dataset.flipped === "true") flipped = true;
+
+          if (img) {
+            // image sticker
+            const ist = window.getComputedStyle(img);
+            return {
+              kind: "image",
+              src: img.getAttribute("src"),
+              left,
+              top,
+              zIndex,
+              width: ist.width,
+              height: ist.height,
+              flipped,
+            };
+          } else {
+            // emoji sticker
+            let raw = el.textContent || "";
+            raw = raw.replace("×", "").replace("↔", "").trim();
+            const fontSize = style.fontSize;
+            return {
+              kind: "emoji",
+              text: raw,
+              left,
+              top,
+              zIndex,
+              fontSize,
+              flipped,
+            };
+          }
+        });
+
+        // shapes
+        const shapes = [...poster.querySelectorAll(".shape-box")].map((box) => {
+          const style = window.getComputedStyle(box);
+          return {
+            shapeType: box.dataset.shapeType || "rect",
+            left: box.style.left,
+            top: box.style.top,
+            width: box.style.width || style.width,
+            height: box.style.height || style.height,
+            background: box.style.background || style.backgroundColor,
+            opacity: box.style.opacity || style.opacity,
+            border: box.style.border || style.border,
+            borderRadius: box.style.borderRadius || style.borderRadius,
+            zIndex: box.style.zIndex || style.zIndex || "",
+          };
+        });
+
+        const snap = {
+          label: label || "",
+
+          // poster look
+          posterClass: poster.className,
+          posterStyle: poster.getAttribute("style") || "",
+          posterBg: poster.style.background || "#ffffff",
+
+          // frame
+          frameStyle: document.getElementById("frameStyle")?.value || "frame-none",
+          frameColor: document.getElementById("frameColor")?.value || "#000000",
+
+          // background controls
+          bgControls: {
+            bgColor: window.bgColorPicker?.value || "#ffffff",
+            grad1: window.grad1?.value || "#ff7e5f",
+            grad2: window.grad2?.value || "#feb47b",
+            gradDir: window.gradDir?.value || "to bottom right",
+          },
+
+          // filters
+          filters: {
+            state: {
+              brightness: window.filterState?.brightness ?? 100,
+              contrast:   window.filterState?.contrast   ?? 100,
+            },
+            ui: {
+              brightness: document.getElementById("brightness")?.value || "100",
+              contrast:   document.getElementById("contrast")?.value   || "100",
+            },
+          },
+
+          // sidebar values
+          sidebar: {
+            eventName:      document.getElementById("eventName")?.value      || "",
+            branchName:     document.getElementById("branchName")?.value     || "",
+            dateValue:      document.getElementById("datePicker")?.value     || "",
+            eventColor:     document.getElementById("eventColor")?.value     || "#000000",
+            branchColor:    document.getElementById("branchColor")?.value    || "#000000",
+            eventFont:      document.getElementById("eventFont")?.value      || "Poppins",
+            branchFont:     document.getElementById("branchFont")?.value     || "sans-serif",
+            eventFontSize:  document.getElementById("eventFontSize")?.value  || "30",
+            branchFontSize: document.getElementById("branchFontSize")?.value || "22",
+          },
+
+          // title / branch / date
+          title: {
+            text:  titleEl?.textContent || "",
+            style: titleEl?.getAttribute("style") || "",
+          },
+          branch: {
+            text:  branchEl?.textContent || "",
+            style: branchEl?.getAttribute("style") || "",
+          },
+          date: {
+            text:    dateEl?.textContent || "",
+            style:   dateEl?.getAttribute("style") || "",
+            display: dateEl?.style.display || "none",
+          },
+
+          photos: photosClone,
+          images,
+          quotes,
+          stickers,
+          shapes,
+        };
+
+        return snap;
+      } catch (e) {
+        console.warn("Undo/Redo snapshot failed:", e);
+        return null;
+      }
+    }
+
+    function pushSnapshot(label) {
+      if (isRestoring) return;
+      const snap = createSnapshot(label);
+      if (!snap) return;
+
+      // cut off future states if we had undone
+      if (historyIndex < historyStack.length - 1 && historyIndex >= 0) {
+        historyStack.splice(historyIndex + 1);
+      }
+
+      historyStack.push(snap);
+
+      // cap to MAX_HISTORY
+      if (historyStack.length > MAX_HISTORY) {
+        historyStack.shift();
+      }
+
+      // always point to last snapshot
+      historyIndex = historyStack.length - 1;
+      updateHistoryButtons();
+    }
+
+    function scheduleSnapshot(label) {
+      if (isRestoring) return;
+      if (snapshotTimer) clearTimeout(snapshotTimer);
+      snapshotTimer = setTimeout(() => {
+        pushSnapshot(label);
+      }, 250);
+    }
+
+    // ===== RESTORE =====
+    function restoreSnapshot(snap) {
+      if (!snap) return;
+      isRestoring = true;
+
+      try {
+        // Poster base
+        poster.className = snap.posterClass;
+        poster.setAttribute("style", snap.posterStyle || "");
+        poster.style.background = snap.posterBg || "#ffffff";
+
+        // frame
+        const fs = document.getElementById("frameStyle");
+        const fc = document.getElementById("frameColor");
+        if (fs) fs.value = snap.frameStyle;
+        if (fc) fc.value = snap.frameColor;
+        if (typeof window.applyFrame === "function") {
+          applyFrame();
+        }
+
+        // background controls
+        if (window.bgColorPicker) bgColorPicker.value = snap.bgControls.bgColor;
+        if (window.grad1) grad1.value = snap.bgControls.grad1;
+        if (window.grad2) grad2.value = snap.bgControls.grad2;
+        if (window.gradDir) gradDir.value = snap.bgControls.gradDir;
+        poster.style.background = snap.posterBg || snap.bgControls.bgColor;
+
+        // filters
+        if (window.filterState) {
+          filterState.brightness = snap.filters.state.brightness;
+          filterState.contrast   = snap.filters.state.contrast;
+        }
+        const br = document.getElementById("brightness");
+        const cr = document.getElementById("contrast");
+        if (br) br.value = snap.filters.ui.brightness;
+        if (cr) cr.value = snap.filters.ui.contrast;
+        if (typeof window.applyFiltersToAllImages === "function") {
+          applyFiltersToAllImages();
+        }
+
+        // sidebar
+        const sb = snap.sidebar;
+        const setVal = (id, val) => {
+          const el = document.getElementById(id);
+          if (el) el.value = val;
+        };
+        setVal("eventName", sb.eventName);
+        setVal("branchName", sb.branchName);
+        setVal("datePicker", sb.dateValue);
+        setVal("eventColor", sb.eventColor);
+        setVal("branchColor", sb.branchColor);
+        setVal("eventFont", sb.eventFont);
+        setVal("branchFont", sb.branchFont);
+        setVal("eventFontSize", sb.eventFontSize);
+        setVal("branchFontSize", sb.branchFontSize);
+
+        // title / branch / date
+        const titleEl  = document.getElementById("title");
+        const branchEl = document.getElementById("branch");
+        const dateEl   = document.getElementById("dateText");
+
+        if (titleEl) {
+          titleEl.textContent = snap.title.text;
+          titleEl.setAttribute("style", snap.title.style || "");
+        }
+        if (branchEl) {
+          branchEl.textContent = snap.branch.text;
+          branchEl.setAttribute("style", snap.branch.style || "");
+        }
+        if (dateEl) {
+          dateEl.textContent = snap.date.text;
+          dateEl.setAttribute("style", snap.date.style || "");
+          dateEl.style.display = snap.date.display || "none";
+        }
+
+        try {
+          if (typeof window.makeDraggable === "function") {
+            makeDraggable(titleEl);
+            makeDraggable(branchEl);
+            makeDraggable(dateEl);
+          }
+        } catch (e) {}
+        try {
+          if (typeof window.enableTextPinchZoom === "function") {
+            enableTextPinchZoom(titleEl);
+            enableTextPinchZoom(branchEl);
+            enableTextPinchZoom(dateEl);
+          }
+        } catch (e) {}
+
+        // images array (logical)
+        photosArr = JSON.parse(JSON.stringify(snap.photos || []));
+        if (typeof window.renderPhotos === "function") {
+          renderPhotos();
+        }
+
+        // apply .image-box DOM state AFTER renderPhotos
+        const imgBoxes = poster.querySelectorAll(".image-box");
+        (snap.images || []).forEach((im, i) => {
+          const box = imgBoxes[i];
+          if (!box) return;
+          const img = box.querySelector("img");
+
+          if (img && im.src) img.src = im.src;
+
+          box.style.left      = im.left;
+          box.style.top       = im.top;
+          box.style.width     = im.width;
+          box.style.height    = im.height;
+          box.style.transform = im.transform;
+          if (im.zIndex) box.style.zIndex = im.zIndex;
+          if (im.boxRadius) box.style.borderRadius = im.boxRadius;
+          if (img && im.imgRadius) img.style.borderRadius = im.imgRadius;
+        });
+
+        // clear old quotes / stickers / shapes
+        poster
+          .querySelectorAll(".quote-box, .sticker, .shape-box")
+          .forEach((el) => el.remove());
+        if (window.textBoxes && Array.isArray(window.textBoxes)) {
+          window.textBoxes.length = 0;
+        }
+
+        // quotes
+        (snap.quotes || []).forEach((q) => {
+          if (typeof window.createTextBox === "function") {
+            createTextBox(q.text || "");
+            const el =
+              window.textBoxes &&
+              window.textBoxes[window.textBoxes.length - 1];
+            if (!el) return;
+            el.style.left       = q.left;
+            el.style.top        = q.top;
+            el.style.transform  = q.transform;
+            el.style.fontFamily = q.fontFamily;
+            el.style.fontSize   = q.fontSize;
+            el.style.color      = q.color;
+            el.style.fontWeight = q.fontWeight;
+            el.style.fontStyle  = q.fontStyle;
+            el.style.textAlign  = q.textAlign;
+          }
+        });
+
+        // shapes
+        (snap.shapes || []).forEach((s) => {
+          if (typeof window.addShape === "function") {
+            addShape();
+            const boxes = poster.querySelectorAll(".shape-box");
+            const box = boxes[boxes.length - 1];
+            if (!box) return;
+            box.dataset.shapeType = s.shapeType || "rect";
+            box.style.left        = s.left;
+            box.style.top         = s.top;
+            box.style.width       = s.width;
+            box.style.height      = s.height;
+            box.style.background  = s.background;
+            box.style.opacity     = s.opacity;
+            box.style.border      = s.border;
+            box.style.borderRadius = s.borderRadius;
+            if (s.zIndex) box.style.zIndex = s.zIndex;
+          }
+        });
+
+        // stickers
+        (snap.stickers || []).forEach((st) => {
+          if (st.kind === "emoji") {
+            if (typeof window.addEmojiSticker === "function") {
+              addEmojiSticker(st.text || "");
+              const all = poster.querySelectorAll(".sticker");
+              const el = all[all.length - 1];
+              if (!el) return;
+              el.style.left = st.left;
+              el.style.top  = st.top;
+              if (st.zIndex) el.style.zIndex = st.zIndex;
+              if (st.fontSize) el.style.fontSize = st.fontSize;
+              if (st.flipped) {
+                el.dataset.flipped = "true";
+                el.style.transform = "scaleX(-1)";
+              } else {
+                el.dataset.flipped = "false";
+                el.style.transform = "scaleX(1)";
+              }
+            }
+          } else if (st.kind === "image") {
+            if (typeof window.addImageStickerFromUrl === "function") {
+              addImageStickerFromUrl(st.src);
+              const all = poster.querySelectorAll(".sticker");
+              let el = null;
+              for (let i = all.length - 1; i >= 0; i--) {
+                if (all[i].querySelector("img")) {
+                  el = all[i];
+                  break;
+                }
+              }
+              if (!el) return;
+              const img = el.querySelector("img");
+              el.style.left = st.left;
+              el.style.top  = st.top;
+              if (st.zIndex) el.style.zIndex = st.zIndex;
+              if (img) {
+                if (st.width)  img.style.width  = st.width;
+                if (st.height) img.style.height = st.height;
+                if (st.flipped) {
+                  el.dataset.flipped = "true";
+                  img.style.transform = "scaleX(-1)";
+                } else {
+                  el.dataset.flipped = "false";
+                  img.style.transform = "scaleX(1)";
+                }
+              }
+            }
+          }
+        });
+
+        if (typeof window.autoFitPoster === "function") {
+          autoFitPoster();
+        }
+      } catch (e) {
+        console.error("Undo/Redo restore error:", e);
+      } finally {
+        isRestoring = false;
+        updateHistoryButtons();
+      }
+    }
+
+    // ===== PUBLIC UNDO / REDO =====
+    function doUndo() {
+      if (historyIndex <= 0) return;
+      historyIndex--;
+      const snap = historyStack[historyIndex];
+      restoreSnapshot(snap);
+    }
+
+    function doRedo() {
+      if (historyIndex < 0 || historyIndex >= historyStack.length - 1) return;
+      historyIndex++;
+      const snap = historyStack[historyIndex];
+      restoreSnapshot(snap);
+    }
+
+    // buttons
+    undoBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      doUndo();
+    });
+    redoBtn.addEventListener("click", (e) => {
+      e.preventDefault();
+      doRedo();
+    });
+
+    // keyboard shortcuts
+    document.addEventListener("keydown", (e) => {
+      const key  = e.key.toLowerCase();
+      const ctrl = e.ctrlKey || e.metaKey;
+      if (!ctrl) return;
+
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        doUndo();
+      } else if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        doRedo();
+      }
+    });
+
+    // ===== AUTO HISTORY TRIGGERS (GLOBAL) =====
+
+    // 1) Any <input>, <select>, <textarea> change / input → save
+    function handleFormChange(e) {
+      const el = e.target;
+      if (
+        !(el instanceof HTMLInputElement) &&
+        !(el instanceof HTMLSelectElement) &&
+        !(el instanceof HTMLTextAreaElement)
+      )
+        return;
+      if (el.id === "undoBtn" || el.id === "redoBtn") return;
+      scheduleSnapshot(
+        (e.type === "input" ? "input:" : "change:") +
+          (el.id || el.name || el.type)
+      );
+    }
+
+    document.addEventListener("change", handleFormChange, true);
+    document.addEventListener("input", handleFormChange, true); // sliders, radius, etc.
+
+    // 2) ANY click (except undo/redo/download) → save after action
+    document.addEventListener(
+      "click",
+      (e) => {
+        const target = e.target;
+        if (!target) return;
+        if (
+          target.closest("#undoBtn") ||
+          target.closest("#redoBtn") ||
+          target.closest("#downloadBtn")
+        )
+          return;
+
+        // let main click handler finish (delete image, add shape, etc.)
+        setTimeout(() => {
+          scheduleSnapshot("click");
+        }, 50);
+      },
+      true
+    );
+
+    // 3) Mouse up / touch end ⇒ drag/resize finished
+    function endDragLike(e) {
+      if (
+        e.target &&
+        e.target.closest &&
+        e.target.closest(
+          ".image-box, .shape-box, .sticker, .quote-box, #title, #branch, #dateText"
+        )
+      ) {
+        scheduleSnapshot("drag/resize");
+      }
+    }
+    document.addEventListener("mouseup", endDragLike, true);
+    document.addEventListener("touchend", endDragLike, true);
+
+    // 4) Quote text edit finish
+    document.addEventListener(
+      "blur",
+      (e) => {
+        if (e.target && e.target.closest && e.target.closest(".quote-box")) {
+          scheduleSnapshot("quote-edit");
+        }
+      },
+      true
+    );
+
+    // 5) Wheel zoom on images / stickers / text
+    let wheelTimer = null;
+    document.addEventListener(
+      "wheel",
+      (e) => {
+        if (
+          e.target &&
+          e.target.closest &&
+          e.target.closest(".image-box, .sticker, .quote-box")
+        ) {
+          if (wheelTimer) clearTimeout(wheelTimer);
+          wheelTimer = setTimeout(() => {
+            scheduleSnapshot("wheel-zoom");
+          }, 250);
+        }
+      },
+      { passive: true, capture: true }
+    );
+
+    // Initial snapshot
+    pushSnapshot("initial");
+  })();
+});
+
+
+
+
+window.addEventListener("load", function () {
+  const resetBtn = document.getElementById("resetBtn");
+  if (!resetBtn) return;
+
+  resetBtn.addEventListener(
+    "click",
+    function (e) {
+      // 👉 vere handlers run avvakunda stop
+      e.preventDefault();
+      e.stopImmediatePropagation();
+
+      const ok = confirm("Are you sure you want to reset the poster?");
+      if (!ok) {
+        return;
+      }
+      if (typeof window.resetPoster === "function") {
+        resetPoster();
+      }
+    },
+    true 
+  );
+});
+
   </script>
-
-
 </body>
 </html>
