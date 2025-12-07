@@ -1017,6 +1017,10 @@ function addImageStickerFromUrl(url, opts = {}) {
 
   // enable pinch zoom if available
   try { enablePinchZoom(w); } catch (e) { /* ignore */ }
+  
+  
+// ✅ pinch zoom for uploaded image sticker
+try { enablePinchZoom(w); } catch (e) {}
 
   // delete
   del.addEventListener('click', (ev) => {
@@ -1539,15 +1543,99 @@ function makeDraggable(el) {
         document.addEventListener('touchend', stopDrag);
 
         // Resize with AR (mouse)
-        let isResizing=false, handleType='', sW=0,sH=0,sX=0,sY=0,sL2=0,sT2=0;
-        box.querySelectorAll('.handle').forEach(h=>{
-          h.addEventListener('mousedown', e=>{
-            isResizing=true;
-            handleType = [...e.target.classList].includes('tl') ? 'tl' : [...e.target.classList].includes('tr') ? 'tr' : [...e.target.classList].includes('bl') ? 'bl' : 'br';
-            sW=p.w; sH=p.h; sX=e.clientX; sY=e.clientY; sL2=p.x; sT2=p.y;
-            e.preventDefault(); e.stopPropagation();
-          });
-        });
+    // ====== RESIZE (MOUSE + TOUCH) ======
+let resizing = false,
+    handleType2 = '',
+    sW2 = 0,
+    sH2 = 0,
+    sX2 = 0,
+    sY2 = 0,
+    sL3 = 0,
+    sT3 = 0;
+
+function startResize(e) {
+  resizing = true;
+
+  const target = e.target;
+  handleType2 = target.classList.contains('tl')
+    ? 'tl'
+    : target.classList.contains('tr')
+    ? 'tr'
+    : target.classList.contains('bl')
+    ? 'bl'
+    : 'br';
+
+  const point = e.touches ? e.touches[0] : e;
+  sW2 = box.offsetWidth;
+  sH2 = box.offsetHeight;
+  sX2 = point.clientX;
+  sY2 = point.clientY;
+  sL3 = parseFloat(box.style.left) || 0;
+  sT3 = parseFloat(box.style.top) || 0;
+
+  e.preventDefault();
+  e.stopPropagation();
+}
+
+box.querySelectorAll('.shape-handle').forEach(h => {
+  h.addEventListener('mousedown', startResize);
+  h.addEventListener('touchstart', startResize, { passive: false });
+});
+
+function doResize(e) {
+  if (!resizing) return;
+
+  const point = e.touches ? e.touches[0] : e;
+  const dx = point.clientX - sX2;
+  const dy = point.clientY - sY2;
+
+  let newW = sW2,
+      newH = sH2,
+      newL = sL3,
+      newT = sT3;
+
+  if (handleType2 === 'br') { newW = sW2 + dx; newH = sH2 + dy; }
+  if (handleType2 === 'bl') { newW = sW2 - dx; newH = sH2 + dy; newL = sL3 + (sW2 - newW); }
+  if (handleType2 === 'tr') { newW = sW2 + dx; newH = sH2 - dy; newT = sT3 + (sH2 - newH); }
+  if (handleType2 === 'tl') { newW = sW2 - dx; newH = sH2 - dy; newL = sL3 + (sW2 - newW); newT = sT3 + (sH2 - newH); }
+
+  // circle -> perfect square
+  if (box.dataset.shapeType === 'circle') {
+    const size = Math.max(20, Math.min(newW, newH));
+    newW = size;
+    newH = size;
+    if (handleType2 === 'bl' || handleType2 === 'tl') newL = sL3 + (sW2 - newW);
+    if (handleType2 === 'tl' || handleType2 === 'tr') newT = sT3 + (sH2 - newH);
+    box.style.borderRadius = '50%';
+  } else if (box.dataset.shapeType === 'rounded') {
+    box.style.borderRadius = (parseInt(shapeRadius.value, 10) || 10) + 'px';
+  }
+
+  // clamp
+  if (newW < 20) newW = 20;
+  if (newH < 8) newH = 8;
+  if (newL < 0) newL = 0;
+  if (newT < 0) newT = 0;
+  if (newL + newW > 1080) newW = 1080 - newL;
+  if (newT + newH > 1080) newH = 1080 - newT;
+
+  box.style.width  = newW + 'px';
+  box.style.height = newH + 'px';
+  box.style.left   = newL + 'px';
+  box.style.top    = newT + 'px';
+
+  e.preventDefault();
+}
+
+function endResize() {
+  resizing = false;
+}
+
+document.addEventListener('mousemove', doResize);
+document.addEventListener('mouseup', endResize);
+document.addEventListener('touchmove', doResize, { passive: false });
+document.addEventListener('touchend', endResize);
+
         document.addEventListener('mousemove', e=>{
           if(!isResizing) return;
           const dx = e.clientX - sX;
@@ -1812,6 +1900,9 @@ if (wm) {
     s.appendChild(flip);
     poster.appendChild(s);
     makeDraggable(s);
+	
+	// ✅ mobile pinch zoom for emoji sticker
+try { enablePinchZoom(s); } catch (e) {}
 
     // 🗑️ Delete sticker
     del.addEventListener('click', (ev) => {
@@ -3307,7 +3398,6 @@ window.addEventListener("load", function () {
     true 
   );
 });
-
 
 
 
