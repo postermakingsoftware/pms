@@ -2008,19 +2008,31 @@ function createTextBox(initialText = "Your quote here") {
     }
   }
 
-  // 💡 DESKTOP: double-click on box → edit
+  // DESKTOP: double-click on box → edit
   box.addEventListener("dblclick", (e) => {
     e.stopPropagation();
     startEdit();
   });
 
-  // 💡 MOBILE + DESKTOP: single tap/click on TEXT → edit
+  // DESKTOP: click directly on text → edit
   span.addEventListener("click", (e) => {
     e.stopPropagation();
     startEdit();
   });
-
-  // blur from span → stop edit
+  
+  
+    // MOBILE: tap (touchend) on text → edit
+  span.addEventListener(
+    "touchend",
+    (e) => {
+      e.preventDefault();      // scroll/zoom prevent
+      e.stopPropagation();     // drag/select triggers block
+      startEdit();
+    },
+    { passive: false }
+  );
+  
+  // blur out of span → stop edit
   span.addEventListener("blur", () => {
     stopEdit();
   });
@@ -3209,7 +3221,9 @@ window.addEventListener("load", function () {
 });
 
 
+
   </script>
+
 
 </body>
 </html>
