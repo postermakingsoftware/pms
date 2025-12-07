@@ -189,8 +189,36 @@
     .frame-green{ border:5px solid #28a745; }
     .frame-custom{ border:5px solid #ff00ff; }
 
-    /* ===== Quotes / Custom Text ===== */
-    .quote-box{ position: absolute; min-width: 120px; max-width: 800px; padding: 4px 8px; cursor: move; user-select: none; background: transparent; line-height: 1.3; white-space: pre-wrap !important; word-break: break-word; overflow-wrap: break-word; display: inline-block !important; writing-mode: initial !important; text-orientation: initial !important; transform-origin: left top; touch-action: none; }
+  .quote-box {
+  position: absolute;
+  min-width: 120px;
+  max-width: 800px;
+  padding: 4px 8px;
+  cursor: move;
+  user-select: none;
+  background: transparent;
+  line-height: 1.3;
+
+  /* 👉 text normal horizontal ga matrame ravadaniki */
+  white-space: pre-wrap !important;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  display: inline-block !important;
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+
+  transform-origin: left top;
+  touch-action: none;
+}
+
+/* children lo kuda vertical mode pettakunda lock */
+.quote-box * {
+  writing-mode: horizontal-tb !important;
+  text-orientation: mixed !important;
+  white-space: inherit !important;
+}
+
+   
     .quote-box.selected{ outline: 1px dashed #00bfff; outline-offset: 2px; }
     .txt-del{ position:absolute; top: -10px; right: -10px; width: 22px; height: 22px; background:#ef476f; color:#fff; border-radius: 50%; font-weight: bold; font-size: 13px; display:flex; align-items:center; justify-content:center; cursor:pointer; transform: translate(50%, -50%); box-shadow: 0 2px 6px rgba(0,0,0,0.25); }
     .align-group{ display:flex; gap:8px; }
@@ -773,6 +801,61 @@
 const stickerToggle = document.getElementById('stickerToggle');
 const stickerPanel = document.getElementById('stickerPanel');
 const stickerPanelClose = document.getElementById('stickerPanelClose');
+
+
+function normalizeQuoteBox(el) {
+  if (!el) return;
+
+  // always horizontal
+  el.style.writingMode = "horizontal-tb";
+  el.style.textOrientation = "mixed";
+  el.style.display = "inline-block";
+  el.style.whiteSpace = "pre-wrap";
+
+  // minimum width so it doesn't collapse into 1-char column
+  el.style.minWidth = "120px";
+  if (el.offsetWidth < 80) {
+    el.style.width = "auto";
+  }
+}
+
+function fixQuoteOrientation(el) {
+  normalizeQuoteBox(el);
+}
+
+// any time quote-box click ayite auto-fix
+document.addEventListener(
+  "click",
+  (e) => {
+    const qb = e.target.closest && e.target.closest(".quote-box");
+    if (qb) {
+      normalizeQuoteBox(qb);
+    }
+  },
+  true
+);
+
+// typing chesthunappudu kuda safe
+document.addEventListener(
+  "input",
+  (e) => {
+    const qb = e.target.closest && e.target.closest(".quote-box");
+    if (qb) {
+      normalizeQuoteBox(qb);
+    }
+  },
+  true
+);
+
+
+
+
+
+
+
+
+
+
 
 function openStickerPanel(){
   stickerPanel.hidden = false;
@@ -1863,79 +1946,204 @@ if (wm) {
       return '#'+[r,g,b].map(x=>x.toString(16).padStart(2,'0')).join('');
     }
 
-    function createTextBox(initialText = "Your quote here"){
-      const el = document.createElement('div');
-      el.className = 'quote-box';
-      el.textContent = initialText;
-      el.style.left = '50%';
-      el.style.top = '230px';
-      el.style.transform = 'translateX(-50%)';
-      el.style.fontFamily = qFont.value || 'Poppins';
-      el.style.fontSize = (qSize.value || 28) + 'px';
-      el.style.color = qColor.value || '#000000';
-      el.style.fontWeight = 'normal';
-      el.style.fontStyle = 'normal';
-      el.style.textAlign = 'left';
-      el.style.zIndex = ++zCounter;
+function createTextBox(initialText = "Your quote here") {
+  const box = document.createElement("div");
+  box.className = "quote-box";
 
-      // Inline edit
-      el.addEventListener('dblclick', (e)=>{
-        e.stopPropagation();
-        el.contentEditable = 'true';
-        el.focus();
-        el.classList.add('selected');
-        currentTextEl = el;
-        el.style.cursor = 'text';
-        el.style.userSelect = 'text';
-        el.style.whiteSpace = 'pre-wrap';
-        
-        
-      });
-      el.addEventListener('blur', ()=>{
-        el.contentEditable = 'false';
-        el.style.cursor = 'move';
-        el.style.userSelect = 'none';
-        el.style.whiteSpace = 'pre-wrap';
-        
-        
-        if(!el.textContent.trim()) el.textContent = 'Your quote here';
-      });
+  // position
+  box.style.left = "50%";
+  box.style.top = "230px";
+  box.style.transform = "translateX(-50%)";
 
-      // Select on click / touch
-      el.addEventListener('mousedown', (e)=>{ if (el.isContentEditable) return; selectQuote(el); });
-      el.addEventListener('touchstart', (e)=>{ if (el.isContentEditable) return; selectQuote(el); }, {passive:false});
+  // text styles (box level)
+  box.style.fontFamily = qFont.value || "Poppins";
+  box.style.fontSize = (qSize.value || 28) + "px";
+  box.style.color = qColor.value || "#000000";
+  box.style.fontWeight = "normal";
+  box.style.fontStyle = "normal";
+  box.style.textAlign = "left";
+  box.style.zIndex = ++zCounter;
 
-      // Delete X
-      const del = document.createElement('div');
-      del.className = 'txt-del';
-      del.textContent = '×';
-      del.title = 'Delete';
-      del.addEventListener('mousedown', (ev)=>{ ev.stopPropagation(); });
-      del.addEventListener('click', (ev)=>{
-        ev.stopPropagation();
-        const idx = textBoxes.indexOf(el);
-        if (idx >= 0) textBoxes.splice(idx,1);
-        el.remove();
-        currentTextEl = null;
-        setAlignButtons(null);
-      });
-      el.appendChild(del);
+  // force horizontal & decent width
+  box.style.writingMode = "horizontal-tb";
+  box.style.textOrientation = "mixed";
+  box.style.whiteSpace = "pre-wrap";
+  box.style.display = "inline-block";
+  box.style.minWidth = "120px";
 
-      // Mouse wheel zoom for text
-      el.addEventListener('wheel',(e)=>{
-        e.preventDefault();
-        const cur = parseInt(window.getComputedStyle(el).fontSize,10) || 28;
-        let next = cur + (e.deltaY < 0 ? 2 : -2);
-        if (next < 10) next = 10;
-        if (next > 200) next = 200;
-        el.style.fontSize = next + 'px';
-      }, { passive:false });
+  // ---------- TEXT SPAN (only this is editable) ----------
+  const span = document.createElement("span");
+  span.className = "quote-text";
+  span.textContent = initialText;
+  span.contentEditable = "false"; // dblclick taruvata true chestam
+  
+  
+  
+    // ... (delete button create code, startEdit()/stopEdit() definitions, etc.)
 
-      poster.appendChild(el);
-      makeDraggable(el);
-      textBoxes.push(el);
-      selectQuote(el);
+  function startEdit() {
+    span.contentEditable = "true";
+    span.focus();
+    currentTextEl = box;
+    box.classList.add("selected");
+    box.style.cursor = "text";
+    box.style.userSelect = "text";
+
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(span);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) {}
+  }
+
+  function stopEdit() {
+    span.contentEditable = "false";
+    box.style.cursor = "move";
+    box.style.userSelect = "none";
+
+    if (!span.textContent.trim()) {
+      span.textContent = "Your quote here";
     }
+  }
+
+  // 💡 DESKTOP: double-click on box → edit
+  box.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    startEdit();
+  });
+
+  // 💡 MOBILE + DESKTOP: single tap/click on TEXT → edit
+  span.addEventListener("click", (e) => {
+    e.stopPropagation();
+    startEdit();
+  });
+
+  // blur from span → stop edit
+  span.addEventListener("blur", () => {
+    stopEdit();
+  });
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  // ---------- Delete X ----------
+  const del = document.createElement("div");
+  del.className = "txt-del";
+  del.textContent = "×";
+  del.title = "Delete";
+  del.contentEditable = "false";
+
+  del.addEventListener("mousedown", (ev) => {
+    ev.stopPropagation();
+  });
+  del.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const idx = textBoxes.indexOf(box);
+    if (idx >= 0) textBoxes.splice(idx, 1);
+    box.remove();
+    currentTextEl = null;
+    setAlignButtons(null);
+  });
+
+  // box structure
+  box.appendChild(span);
+  box.appendChild(del);
+
+  // ---------- Edit logic ----------
+  function startEdit() {
+    span.contentEditable = "true";
+    span.focus();
+    currentTextEl = box;
+    box.classList.add("selected");
+    box.style.cursor = "text";
+    box.style.userSelect = "text";
+
+    // just select text inside span (delete button untouched)
+    try {
+      const range = document.createRange();
+      range.selectNodeContents(span);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) {}
+  }
+
+  function stopEdit() {
+    span.contentEditable = "false";
+    box.style.cursor = "move";
+    box.style.userSelect = "none";
+
+    if (!span.textContent.trim()) {
+      span.textContent = "Your quote here";
+    }
+  }
+
+  // double-click → edit
+  box.addEventListener("dblclick", (e) => {
+    e.stopPropagation();
+    startEdit();
+  });
+
+  // blur out of span → stop edit
+  span.addEventListener("blur", () => {
+    stopEdit();
+  });
+
+  // ---------- Select / drag ----------
+  box.addEventListener("mousedown", (e) => {
+    if (span.isContentEditable) return; // editing lo unte drag kakunda
+    selectQuote(box);
+  });
+
+  box.addEventListener(
+    "touchstart",
+    (e) => {
+      if (span.isContentEditable) return;
+      selectQuote(box);
+    },
+    { passive: false }
+  );
+
+  // ---------- Scroll wheel zoom ----------
+  box.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const cur = parseInt(window.getComputedStyle(box).fontSize, 10) || 28;
+      let next = cur + (e.deltaY < 0 ? 2 : -2);
+      if (next < 10) next = 10;
+      if (next > 200) next = 200;
+      box.style.fontSize = next + "px";
+    },
+    { passive: false }
+  );
+
+  poster.appendChild(box);
+  makeDraggable(box);
+  textBoxes.push(box);
+  selectQuote(box);
+
+  return box;
+}
+
+
+
+
+
+
+
+
+
 
     // Sidebar actions
     addTextBtn.addEventListener('click', ()=> createTextBox("Your quote here"));
@@ -3000,6 +3208,8 @@ window.addEventListener("load", function () {
   );
 });
 
+
   </script>
+
 </body>
 </html>
