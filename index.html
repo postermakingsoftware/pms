@@ -2424,96 +2424,192 @@ function createTextBox(initialText = "Your quote here") {
       }, 80);
     });
 
-  /* ================== MOBILE PINCH ZOOM (FINAL — FIXED + COMPATIBLE + BOUNDARY SAFE) ================== */
-  function enablePinchZoom(el) {
-    let startDist = 0, startW = 0, startH = 0, startFont = 0;
-    let isPinching = false;
+function enablePinchZoom(el) {
+  let startDist = 0,
+    startW = 0,
+    startH = 0,
+    startFont = 0;
+  let isPinching = false;
 
-    function getDistance(touches) {
-      const [t1, t2] = touches;
-      const dx = t2.clientX - t1.clientX;
-      const dy = t2.clientY - t1.clientY;
-      return Math.hypot(dx, dy);
-    }
+  // shape center (in poster 1080x1080 coordinate system)
+  let centerX = 0;
+  let centerY = 0;
 
-    el.addEventListener('touchstart', (e) => {
+  const posterEl = document.getElementById("poster");
+
+  function getDistance(touches) {
+    const [t1, t2] = touches;
+    const dx = t2.clientX - t1.clientX;
+    const dy = t2.clientY - t1.clientY;
+    return Math.hypot(dx, dy);
+  }
+
+  el.addEventListener(
+    "touchstart",
+    (e) => {
       if (e.touches.length === 2) {
         isPinching = true;
         startDist = getDistance(e.touches);
 
-        if (el.querySelector('img')) {
-          const img = el.querySelector('img');
+        // ---- capture center in poster coordinates (1080 space) ----
+        const rect = el.getBoundingClientRect();
+        const posterRect = posterEl.getBoundingClientRect();
+        const posterScale = posterRect.width / 1080; // same as autoFitPoster
+
+        const cxClient = rect.left + rect.width / 2;
+        const cyClient = rect.top + rect.height / 2;
+
+        centerX = (cxClient - posterRect.left) / posterScale;
+        centerY = (cyClient - posterRect.top) / posterScale;
+
+        // starting sizes
+        if (el.querySelector("img")) {
+          const img = el.querySelector("img");
           startW = img.offsetWidth;
           startH = img.offsetHeight;
         } else {
           startW = el.offsetWidth;
           startH = el.offsetHeight;
-          startFont = parseInt(window.getComputedStyle(el).fontSize) || 64;
+          startFont =
+            parseInt(window.getComputedStyle(el).fontSize, 10) || 64;
         }
-        e.stopPropagation();
-        e.preventDefault();
-      }
-    }, { passive: false });
-
-    el.addEventListener('touchmove', (e) => {
-      if (isPinching && e.touches.length === 2) {
-        const newDist = getDistance(e.touches);
-        const scale = newDist / startDist;
-
-      // Update size
-        if (el.classList.contains('image-box')) {
-          const img = el.querySelector('img');
-          img.style.width = Math.max(40, startW * scale) + 'px';
-          img.style.height = Math.max(40, startH * scale) + 'px';
-          // also update inner & box sizes
-          const inner = el.querySelector('.image-inner');
-          if(inner){ inner.style.width = img.style.width; inner.style.height = img.style.height; }
-          el.style.width = img.style.width; el.style.height = img.style.height;
-        } else if (el.classList.contains('shape-box')) {
-          el.style.width = Math.max(20, startW * scale) + 'px';
-          el.style.height = Math.max(20, startH * scale) + 'px';
-        } else if (el.classList.contains('sticker')) {
-          const img = el.querySelector('img');
-          if (img) {
-            img.style.width = Math.max(40, startW * scale) + 'px';
-            img.style.height = Math.max(40, startH * scale) + 'px';
-          } else {
-            el.style.fontSize = Math.min(200, Math.max(24, startFont * scale)) + 'px';
-          }
-        }
-
-        // ✅ Keep inside poster boundaries
-        const posterRect = document.getElementById("poster").getBoundingClientRect();
-        const rect = el.getBoundingClientRect();
-        const offsetLeft = rect.left - posterRect.left;
-        const offsetTop = rect.top - posterRect.top;
-
-        let newLeft = parseFloat(el.style.left) || offsetLeft;
-        let newTop = parseFloat(el.style.top) || offsetTop;
-
-        const maxX = 1080 - el.offsetWidth;
-        const maxY = 1080 - el.offsetHeight;
-
-        if (newLeft < 0) newLeft = 0;
-        if (newTop < 0) newTop = 0;
-        if (newLeft > maxX) newLeft = maxX;
-        if (newTop > maxY) newTop = maxY;
-
-        el.style.left = newLeft + "px";
-        el.style.top = newTop + "px";
 
         e.stopPropagation();
         e.preventDefault();
       }
-    }, { passive: false });
+    },
+    { passive: false }
+  );
 
-    el.addEventListener('touchend', (e) => {
-      if (e.touches.length < 2) {
-        isPinching = false;
-        startDist = 0;
+  el.addEventListener(
+    "touchmove",
+    (e) => {
+      if (!isPinching || e.touches.length !== 2) return;
+
+      const newDist = getDistance(e.touches);
+      const scale = newDist / startDist;
+
+      // ===== IMAGE-BOX =====
+      if (el.classList.contains("image-box")) {
+        const img = el.querySelector("img");
+        const inner = el.querySelector(".image-inner");
+        if (!img || !inner) return;
+
+        let newW = Math.max(40, startW * scale);
+        let newH = Math.max(40, startH * scale);
+
+        // keep center
+        let left = centerX - newW / 2;
+        let top = centerY - newH / 2;
+
+        // clamp
+        const maxX = 1080 - newW;
+        const maxY = 1080 - newH;
+        if (left < 0) left = 0;
+        if (top < 0) top = 0;
+        if (left > maxX) left = maxX;
+        if (top > maxY) top = maxY;
+
+        img.style.width = newW + "px";
+        img.style.height = newH + "px";
+        inner.style.width = newW + "px";
+        inner.style.height = newH + "px";
+        el.style.width = newW + "px";
+        el.style.height = newH + "px";
+        el.style.left = left + "px";
+        el.style.top = top + "px";
+
+        e.stopPropagation();
+        e.preventDefault();
+        return;
       }
-    });
-  }
+
+      // ===== SHAPE-BOX =====
+      if (el.classList.contains("shape-box")) {
+        let newW = Math.max(20, startW * scale);
+        let newH = Math.max(20, startH * scale);
+
+        // circle -> perfect square
+        if (el.dataset.shapeType === "circle") {
+          const size = Math.max(newW, newH);
+          newW = size;
+          newH = size;
+        }
+
+        // keep center fixed
+        let left = centerX - newW / 2;
+        let top = centerY - newH / 2;
+
+        // clamp to poster 1080x1080
+        const maxX = 1080 - newW;
+        const maxY = 1080 - newH;
+        if (left < 0) left = 0;
+        if (top < 0) top = 0;
+        if (left > maxX) left = maxX;
+        if (top > maxY) top = maxY;
+
+        el.style.width = newW + "px";
+        el.style.height = newH + "px";
+        el.style.left = left + "px";
+        el.style.top = top + "px";
+
+        // circle border radius
+        if (el.dataset.shapeType === "circle") {
+          el.style.borderRadius = "50%";
+        }
+
+        e.stopPropagation();
+        e.preventDefault();
+        return;
+      }
+
+      // ===== STICKER =====
+      if (el.classList.contains("sticker")) {
+        const img = el.querySelector("img");
+
+        if (img) {
+          let newW = Math.max(40, startW * scale);
+          let newH = Math.max(40, startH * scale);
+
+          let left = centerX - newW / 2;
+          let top = centerY - newH / 2;
+
+          const maxX = 1080 - newW;
+          const maxY = 1080 - newH;
+          if (left < 0) left = 0;
+          if (top < 0) top = 0;
+          if (left > maxX) left = maxX;
+          if (top > maxY) top = maxY;
+
+          img.style.width = newW + "px";
+          img.style.height = newH + "px";
+          el.style.left = left + "px";
+          el.style.top = top + "px";
+        } else {
+          // emoji sticker → font-size scale
+          const newFont = Math.min(
+            200,
+            Math.max(24, startFont * scale)
+          );
+          el.style.fontSize = newFont + "px";
+        }
+
+        e.stopPropagation();
+        e.preventDefault();
+        return;
+      }
+    },
+    { passive: false }
+  );
+
+  el.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2) {
+      isPinching = false;
+      startDist = 0;
+    }
+  });
+}
+
 
   /* ✅ Watch for new elements added to poster (photos, shapes, stickers) */
   const pinchObserver = new MutationObserver(() => {
@@ -3211,6 +3307,8 @@ window.addEventListener("load", function () {
     true 
   );
 });
+
+
 
 
   </script>
