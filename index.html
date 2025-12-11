@@ -4279,6 +4279,178 @@
         true
       );
     });
+
+
+
+
+
+
+
+
+
+// -----------------------------
+// Global corner-resize handler (pointer events)
+// Paste this at the end of your <script> (once)
+// -----------------------------
+(function(){
+  if (window.__PMS_CORNER_RESIZE__) return;
+  window.__PMS_CORNER_RESIZE__ = true;
+
+  const state = {
+    active: false,
+    box: null,
+    pid: null,
+    handle: null,
+    startX: 0,
+    startY: 0,
+    startW: 0,
+    startH: 0,
+    startL: 0,
+    startT: 0,
+    ar: 1,
+    img: null,
+    inner: null,
+    photoObj: null // link into photosArr if available
+  };
+
+  function findPhotoByPid(pid){
+    try { return window.photosArr && window.photosArr.find(p => p.id === pid); } catch(e){ return null; }
+  }
+
+  function onPointerDown(e){
+    // only start when a corner handle is pressed
+    const el = e.target;
+    if (!el || !el.classList || !el.classList.contains('handle')) return;
+
+    const box = el.closest && el.closest('.image-box');
+    if (!box) return;
+
+    // block default (avoid scroll)
+    e.preventDefault();
+    e.stopPropagation();
+
+    // init state
+    state.active = true;
+    state.box = box;
+    state.handle = [...el.classList].find(c => /^(tl|tr|bl|br)$/.test(c)) || 'br';
+    state.startX = (e.clientX !== undefined) ? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+    state.startY = (e.clientY !== undefined) ? e.clientY : (e.touches && e.touches[0] && e.touches[0].clientY) || 0;
+    state.startW = box.offsetWidth;
+    state.startH = box.offsetHeight;
+    state.startL = parseFloat(box.style.left) || box.offsetLeft || 0;
+    state.startT = parseFloat(box.style.top)  || box.offsetTop  || 0;
+    state.img = box.querySelector('img');
+    state.inner = box.querySelector('.image-inner');
+
+    // find linked photo object (if you keep photosArr in global scope)
+    state.pid = box.dataset.pid || null;
+    state.photoObj = state.pid ? findPhotoByPid(state.pid) : null;
+    state.ar = (state.photoObj && state.photoObj.ar) ? state.photoObj.ar : (state.img ? (state.img.naturalWidth / (state.img.naturalHeight || 1)) : (state.startW / (state.startH || 1)));
+
+    // capture pointer to get all pointer events for this target
+    if (e.pointerId && box.setPointerCapture) {
+      try { box.setPointerCapture(e.pointerId); } catch(err) {}
+    }
+  }
+
+  function onPointerMove(e){
+    if (!state.active) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const curX = (e.clientX !== undefined) ? e.clientX : (e.touches && e.touches[0] && e.touches[0].clientX) || 0;
+    const dx = curX - state.startX;
+
+    // For simplicity we change width by dx (respect aspect ratio)
+    let newW = state.startW;
+    let newH = state.startH;
+    let newL = state.startL;
+    let newT = state.startT;
+
+    if (state.handle === 'br') {
+      newW = state.startW + dx;
+      newH = Math.round(newW / state.ar);
+    } else if (state.handle === 'bl') {
+      newW = state.startW - dx;
+      newH = Math.round(newW / state.ar);
+      newL = state.startL + (state.startW - newW);
+    } else if (state.handle === 'tr') {
+      newW = state.startW + dx;
+      newH = Math.round(newW / state.ar);
+      newT = state.startT + (state.startH - newH);
+    } else if (state.handle === 'tl') {
+      newW = state.startW - dx;
+      newH = Math.round(newW / state.ar);
+      newL = state.startL + (state.startW - newW);
+      newT = state.startT + (state.startH - newH);
+    }
+
+    // limits
+    if (newW < 40) newW = 40;
+    if (newH < 40) newH = 40;
+    if (newW > 1600) newW = 1600;
+    if (newL < 0) newL = 0;
+    if (newT < 0) newT = 0;
+    if (newL + newW > 1080) newL = 1080 - newW;
+    if (newT + newH > 1080) newT = 1080 - newH;
+
+    // apply to DOM
+    state.box.style.width  = Math.round(newW) + 'px';
+    state.box.style.height = Math.round(newH) + 'px';
+    state.box.style.left   = Math.round(newL) + 'px';
+    state.box.style.top    = Math.round(newT) + 'px';
+
+    if (state.img) {
+      state.img.style.width  = Math.round(newW) + 'px';
+      state.img.style.height = Math.round(newH) + 'px';
+    }
+    if (state.inner) {
+      state.inner.style.width  = Math.round(newW) + 'px';
+      state.inner.style.height = Math.round(newH) + 'px';
+    }
+
+    // update linked photo object so future render uses right values
+    if (state.photoObj) {
+      state.photoObj.w = Math.round(newW);
+      state.photoObj.h = Math.round(newH);
+      state.photoObj.x = Math.round(newL);
+      state.photoObj.y = Math.round(newT);
+    }
+  }
+
+  function onPointerUp(e){
+    if (!state.active) return;
+    state.active = false;
+
+    // release capture
+    try { if (e.pointerId && state.box && state.box.releasePointerCapture) state.box.releasePointerCapture(e.pointerId); } catch(err){}
+
+    // no further action — renderPhotos may be called later and will pick up photosArr values
+  }
+
+  // use pointer events (covers mouse + touch + pen)
+  document.addEventListener('pointerdown', onPointerDown, { passive: false, capture: true });
+  document.addEventListener('pointermove', onPointerMove, { passive: false, capture: true });
+  document.addEventListener('pointerup',   onPointerUp,   { passive: false, capture: true });
+  document.addEventListener('pointercancel', onPointerUp,  { passive: false, capture: true });
+
+  // Fallback for older browsers - also keep touch events working
+  document.addEventListener('touchstart', function(e){
+    // if the target is a .handle, translate to pointerdown-like behavior
+    const t = e.target;
+    if (t && t.classList && t.classList.contains('handle')) {
+      onPointerDown(e.touches[0]);
+    }
+  }, { passive: false, capture: true });
+
+})();
+
+
+
+
+
+
+
   </script>
 
 
