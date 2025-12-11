@@ -2011,376 +2011,320 @@
       renderPhotos();
     }
 
-    function renderPhotos() {
-      poster.querySelectorAll('.image-box').forEach(b => b.remove());
+  function renderPhotos(){
+  // remove existing boxes
+  poster.querySelectorAll('.image-box').forEach(b=>b.remove());
 
-      photosArr.forEach((p, idx) => {
-        const box = document.createElement('div');
-        box.className = 'image-box';
-        box.dataset.pid = p.id;
-        box.style.left = p.x + 'px';
-        box.style.top = p.y + 'px';
-        box.style.zIndex = (++zCounter).toString();
-        box.style.position = 'absolute';
+  photosArr.forEach((p, idx)=>{
+    // create elements
+    const box = document.createElement('div');
+    box.className = 'image-box';
+    box.dataset.pid = p.id;
+    box.style.left = (p.x || 0) + 'px';
+    box.style.top  = (p.y || 0) + 'px';
+    box.style.zIndex = (++zCounter).toString();
+    box.style.position = 'absolute';
+    box.style.width = (p.w || 120) + 'px';
+    box.style.height = (p.h || 120) + 'px';
+
+    const inner = document.createElement('div');
+    inner.className = 'image-inner';
+    inner.style.left = '0';
+    inner.style.top = '0';
+    inner.style.position = 'absolute';
+    inner.style.boxSizing = 'border-box';
+    inner.style.overflow = 'hidden';
+    inner.style.borderRadius = (p.radius || 0) + 'px';
+    inner.style.border = (p.borderWidth || 0) + 'px solid ' + (p.borderColor || 'transparent');
+    inner.style.width = box.style.width;
+    inner.style.height = box.style.height;
+
+    const img = document.createElement('img');
+    img.draggable = false;
+    img.style.pointerEvents = 'none';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = 'cover';
+    img.style.transform = p.flipped ? 'scaleX(-1)' : 'scaleX(1)';
+    img.style.filter = buildFilterString();
+    // set src after assigning onload to avoid flash
+    img.onload = function(){
+      try{
+        const naturalAR = (img.naturalWidth && img.naturalHeight) ? (img.naturalWidth / img.naturalHeight) : p.ar || 1;
+        p.ar = naturalAR;
+        // preserve current width, recompute height based on aspect
+        const currentW = p.w && p.w>0 ? p.w : inner.offsetWidth;
+        const newH = Math.round(currentW / p.ar);
+        p.w = currentW;
+        p.h = newH;
+        // apply sizes
         box.style.width = p.w + 'px';
         box.style.height = p.h + 'px';
-
-        // inner wrapper that actually clips the image with border-radius
-        const inner = document.createElement('div');
-        inner.className = 'image-inner';
         inner.style.width = p.w + 'px';
         inner.style.height = p.h + 'px';
-        inner.style.borderRadius = (p.radius || 0) + 'px';
-        inner.style.overflow = 'hidden';
-        inner.style.position = 'absolute';
-        inner.style.left = '0';
-        inner.style.top = '0';
-        inner.style.boxSizing = 'border-box';
-        // apply border (uses box-sizing so border is inside size)
+        // keep border (inner uses box-sizing)
         inner.style.border = (p.borderWidth || 0) + 'px solid ' + (p.borderColor || 'transparent');
+      }catch(e){}
+    };
+    img.onerror = function(){ /* keep previous src if broken */ };
 
-        const img = document.createElement('img');
-        img.src = p.src;
-        img.style.width = p.w + 'px';
-        img.style.height = p.h + 'px';
-        img.style.filter = buildFilterString();
-        img.style.transform = p.flipped ? 'scaleX(-1)' : 'scaleX(1)';
-        img.draggable = false;
-        img.style.pointerEvents = 'none';
+    // set src last to trigger load after onload bound
+    img.src = p.src;
 
-        inner.appendChild(img);
-        box.appendChild(inner);
+    inner.appendChild(img);
+    box.appendChild(inner);
 
-        // Controls (outside inner so not clipped)
-        const del = document.createElement('button');
-        del.className = 'ibtn';
-        del.textContent = 'X';
-        del.title = 'Delete';
-        del.onclick = (ev) => {
-          ev.stopPropagation();
-          try {
-            if (p._objectURL) URL.revokeObjectURL(p._objectURL);
-          } catch (e) {}
-          const index = photosArr.findIndex(it => it.id === p.id);
-          if (index >= 0) photosArr.splice(index, 1);
-          autoPlace();
-        };
-        box.appendChild(del);
+    // Controls
+    const del = document.createElement('button');
+    del.className = 'ibtn'; del.textContent='X'; del.title='Delete';
+    del.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      const index = photosArr.findIndex(it => it.id === p.id);
+      if(index>=0) photosArr.splice(index,1);
+      autoPlace();
+    });
+    box.appendChild(del);
 
-        const flip = document.createElement('button');
-        flip.className = 'flip-btn';
-        flip.textContent = '↔';
-        flip.title = 'Flip';
-        flip.onclick = (ev) => {
-          ev.stopPropagation();
-          p.flipped = !p.flipped;
-          img.style.transform = p.flipped ? 'scaleX(-1)' : 'scaleX(1)';
-        };
-        box.appendChild(flip);
+    const flip = document.createElement('button');
+    flip.className='flip-btn'; flip.textContent='↔'; flip.title='Flip';
+    flip.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      p.flipped = !p.flipped;
+      img.style.transform = p.flipped ? 'scaleX(-1)' : 'scaleX(1)';
+    });
+    box.appendChild(flip);
 
-        const crop = document.createElement('button');
-        crop.className = 'crop-btn';
-        crop.textContent = '✂';
-        crop.title = 'Crop';
-        crop.onclick = (ev) => {
-          ev.stopPropagation();
-          openEditorById(p.id);
-        };
-        box.appendChild(crop);
+    const crop = document.createElement('button');
+    crop.className='crop-btn'; crop.textContent='✂'; crop.title='Crop';
+    crop.addEventListener('click', (ev)=>{ ev.stopPropagation(); openEditorById(p.id); });
+    box.appendChild(crop);
 
-        // Handles
-        ['tl', 'tr', 'bl', 'br'].forEach(pos => {
-          const h = document.createElement('div');
-          h.className = `handle ${pos}`;
-          box.appendChild(h);
-        });
+    // Handles
+    ['tl','tr','bl','br'].forEach(pos=>{
+      const h = document.createElement('div');
+      h.className = `handle ${pos}`;
+      // style is from CSS .handle.* — appended to box
+      box.appendChild(h);
+    });
 
-        // Select + bring front (mouse + touch)
-        const selectBox = () => {
-          poster.querySelectorAll('.image-box').forEach(b => b.classList.remove('selected'));
-          box.classList.add('selected');
-          box.style.zIndex = (++zCounter).toString();
-          // sync slider with this selected image's radius & border
-          const pIndex = photosArr.findIndex(pp => pp.id === p.id);
-          if (pIndex >= 0) {
-            const r = photosArr[pIndex].radius || 0;
-            imgRadiusInput.value = r;
-            imgRadiusVal.textContent = r + 'px';
+    // select box
+    const selectBox = ()=>{
+      poster.querySelectorAll('.image-box').forEach(b=>b.classList.remove('selected'));
+      box.classList.add('selected');
+      box.style.zIndex = (++zCounter).toString();
+      // sync radius/border controls
+      const pIndex = photosArr.findIndex(pp => pp.id === p.id);
+      if (pIndex >= 0) {
+        const r = photosArr[pIndex].radius || 0;
+        imgRadiusInput.value = r;
+        imgRadiusVal.textContent = r + 'px';
+        const bc = photosArr[pIndex].borderColor || defaultImgBorderColor;
+        const bw = photosArr[pIndex].borderWidth || 0;
+        imgBorderColorInput.value = bc;
+        imgBorderWidthInput.value = bw;
+      }
+    };
+    box.addEventListener('pointerdown', (e)=>{ if(e.button === 2) return; /* ignore right click */ selectBox(); });
 
-            // border sync
-            const bc = photosArr[pIndex].borderColor || defaultImgBorderColor;
-            const bw = photosArr[pIndex].borderWidth || 0;
-            imgBorderColorInput.value = bc;
-            imgBorderWidthInput.value = bw;
-          }
-        };
-        box.addEventListener('mousedown', selectBox);
-        box.addEventListener('touchstart', (e) => {
-          selectBox();
-        }, {
-          passive: false
-        });
-
-        // Drag free
-        let isDragging = false,
-          startX = 0,
-          startY = 0,
-          sL = 0,
-          sT = 0;
-        const getXY = (e) => e.touches ? {
-          x: e.touches[0].clientX,
-          y: e.touches[0].clientY
-        } : {
-          x: e.clientX,
-          y: e.clientY
-        };
-
-        function startDrag(e) {
-          if (e.target.classList.contains('handle') || e.target.classList.contains('ibtn') || e.target.classList.contains('flip-btn') || e.target.classList.contains('crop-btn')) return;
-          isDragging = true;
-          const pos = getXY(e);
-          startX = pos.x;
-          startY = pos.y;
-          sL = p.x;
-          sT = p.y;
-          e.preventDefault();
-          e.stopPropagation();
+    // Drag (pointer) — only start if not on a handle or control
+    (function wireDrag(){
+      let dragging = false, start = {x:0,y:0}, startPos = {x:0,y:0};
+      box.addEventListener('pointerdown', (e)=>{
+        // ignore if down on handle or control elements
+        const cls = e.target.className || '';
+        if (cls.includes('handle') || cls.includes('ibtn') || cls.includes('flip-btn') || cls.includes('crop-btn')) return;
+        box.setPointerCapture(e.pointerId);
+        dragging = true;
+        start = { x: e.clientX, y: e.clientY };
+        startPos = { x: p.x, y: p.y };
+        e.preventDefault();
+        e.stopPropagation();
+      });
+      box.addEventListener('pointermove', (e)=>{
+        if(!dragging) return;
+        // account for poster scale
+        const transform = window.getComputedStyle(poster).transform;
+        let scale = 1;
+        if (transform && transform !== 'none'){
+          const m = transform.match(/matrix\(([-\d.]+)/);
+          if(m) scale = parseFloat(m[1]);
         }
+        const dx = (e.clientX - start.x) / scale;
+        const dy = (e.clientY - start.y) / scale;
+        p.x = startPos.x + dx;
+        p.y = startPos.y + dy;
+        // clamp inside poster
+        p.x = Math.min(Math.max(0, p.x), 1080 - box.offsetWidth);
+        p.y = Math.min(Math.max(0, p.y), 1080 - box.offsetHeight);
+        box.style.left = p.x + 'px';
+        box.style.top  = p.y + 'px';
+      });
+      const endDrag = (e)=>{
+        if(!dragging) return;
+        try{ box.releasePointerCapture(e.pointerId); }catch(e){}
+        dragging = false;
+      };
+      box.addEventListener('pointerup', endDrag);
+      box.addEventListener('pointercancel', endDrag);
+      // also ensure pointerleave ends drag for safety
+      box.addEventListener('pointerleave', (e)=>{ /* don't auto-stop - user may want to continue */ });
+    })();
 
-        function moveDrag(e) {
-          if (!isDragging) return;
-          const pos = getXY(e);
-          const transform = window.getComputedStyle(poster).transform;
-          let scale = 1;
-          if (transform && transform !== 'none') {
-            const m = transform.match(/matrix\(([-\d.]+)/);
-            if (m) scale = parseFloat(m[1]);
-          }
-          const dx = (pos.x - startX) / scale;
-          const dy = (pos.y - startY) / scale;
-          p.x = sL + dx;
-          p.y = sT + dy;
-          box.style.left = p.x + 'px';
-          box.style.top = p.y + 'px';
-        }
-
-        function stopDrag() {
-          isDragging = false;
-        }
-        box.addEventListener('mousedown', startDrag);
-        document.addEventListener('mousemove', moveDrag);
-        document.addEventListener('mouseup', stopDrag);
-        box.addEventListener('touchstart', startDrag, {
-          passive: false
-        });
-        document.addEventListener('touchmove', moveDrag, {
-          passive: false
-        });
-        document.addEventListener('touchend', stopDrag);
-
-        // Resize with AR (mouse)
-        // ====== RESIZE (MOUSE + TOUCH) ======
-        let resizing = false,
-          handleType2 = '',
-          sW2 = 0,
-          sH2 = 0,
-          sX2 = 0,
-          sY2 = 0,
-          sL3 = 0,
-          sT3 = 0;
-
-        function startResize(e) {
+    // Resize with aspect-ratio (pointer)
+    (function wireResize(){
+      let resizing = false;
+      let handleType = '';
+      let startClient = {x:0,y:0}, startProps = {w:0,h:0,x:0,y:0};
+      const handles = box.querySelectorAll('.handle');
+      handles.forEach(h=>{
+        h.addEventListener('pointerdown', (e)=>{
+          e.stopPropagation(); e.preventDefault();
+          box.setPointerCapture(e.pointerId);
           resizing = true;
-
-          const target = e.target;
-          handleType2 = target.classList.contains('tl') ?
-            'tl' :
-            target.classList.contains('tr') ?
-            'tr' :
-            target.classList.contains('bl') ?
-            'bl' :
-            'br';
-
-          const point = e.touches ? e.touches[0] : e;
-          sW2 = box.offsetWidth;
-          sH2 = box.offsetHeight;
-          sX2 = point.clientX;
-          sY2 = point.clientY;
-          sL3 = parseFloat(box.style.left) || 0;
-          sT3 = parseFloat(box.style.top) || 0;
-
-          e.preventDefault();
-          e.stopPropagation();
-        }
-
-        box.querySelectorAll('.shape-handle').forEach(h => {
-          h.addEventListener('mousedown', startResize);
-          h.addEventListener('touchstart', startResize, {
-            passive: false
-          });
+          handleType = [...e.target.classList].includes('tl') ? 'tl' : [...e.target.classList].includes('tr') ? 'tr' : [...e.target.classList].includes('bl') ? 'bl' : 'br';
+          startClient = { x: e.clientX, y: e.clientY };
+          startProps = { w: box.offsetWidth, h: box.offsetHeight, x: p.x, y: p.y };
         });
-
-        function doResize(e) {
-          if (!resizing) return;
-
-          const point = e.touches ? e.touches[0] : e;
-          const dx = point.clientX - sX2;
-          const dy = point.clientY - sY2;
-
-          let newW = sW2,
-            newH = sH2,
-            newL = sL3,
-            newT = sT3;
-
-          if (handleType2 === 'br') {
-            newW = sW2 + dx;
-            newH = sH2 + dy;
-          }
-          if (handleType2 === 'bl') {
-            newW = sW2 - dx;
-            newH = sH2 + dy;
-            newL = sL3 + (sW2 - newW);
-          }
-          if (handleType2 === 'tr') {
-            newW = sW2 + dx;
-            newH = sH2 - dy;
-            newT = sT3 + (sH2 - newH);
-          }
-          if (handleType2 === 'tl') {
-            newW = sW2 - dx;
-            newH = sH2 - dy;
-            newL = sL3 + (sW2 - newW);
-            newT = sT3 + (sH2 - newH);
-          }
-
-          // circle -> perfect square
-          if (box.dataset.shapeType === 'circle') {
-            const size = Math.max(20, Math.min(newW, newH));
-            newW = size;
-            newH = size;
-            if (handleType2 === 'bl' || handleType2 === 'tl') newL = sL3 + (sW2 - newW);
-            if (handleType2 === 'tl' || handleType2 === 'tr') newT = sT3 + (sH2 - newH);
-            box.style.borderRadius = '50%';
-          } else if (box.dataset.shapeType === 'rounded') {
-            box.style.borderRadius = (parseInt(shapeRadius.value, 10) || 10) + 'px';
-          }
-
-          // clamp
-          if (newW < 20) newW = 20;
-          if (newH < 8) newH = 8;
-          if (newL < 0) newL = 0;
-          if (newT < 0) newT = 0;
-          if (newL + newW > 1080) newW = 1080 - newL;
-          if (newT + newH > 1080) newH = 1080 - newT;
-
-          box.style.width = newW + 'px';
-          box.style.height = newH + 'px';
-          box.style.left = newL + 'px';
-          box.style.top = newT + 'px';
-
-          e.preventDefault();
-        }
-
-        function endResize() {
-          resizing = false;
-        }
-
-        document.addEventListener('mousemove', doResize);
-        document.addEventListener('mouseup', endResize);
-        document.addEventListener('touchmove', doResize, {
-          passive: false
-        });
-        document.addEventListener('touchend', endResize);
-
-        document.addEventListener('mousemove', e => {
-          if (!isResizing) return;
-          const dx = e.clientX - sX;
-          let newW = sW,
-            newH = sH,
-            newL = sL2,
-            newT = sT2,
-            ar = p.ar;
-          if (handleType === 'br') {
-            newW = sW + dx;
-            newH = Math.round(newW / ar);
-          }
-          if (handleType === 'bl') {
-            newW = sW - dx;
-            newH = Math.round(newW / ar);
-            newL = sL2 + (sW - newW);
-          }
-          if (handleType === 'tr') {
-            newW = sW + dx;
-            newH = Math.round(newW / ar);
-            newT = sT2 + (sH - newH);
-          }
-          if (handleType === 'tl') {
-            newW = sW - dx;
-            newH = Math.round(newW / ar);
-            newL = sL2 + (sW - newW);
-            newT = sT2 + (sH - newH);
-          }
-          if (newW < 40) return;
-          p.w = newW;
-          p.h = newH;
-          p.x = newL;
-          p.y = newT;
-          // update DOM sizes
-          img.style.width = p.w + 'px';
-          img.style.height = p.h + 'px';
-          inner.style.width = p.w + 'px';
-          inner.style.height = p.h + 'px';
-          box.style.left = p.x + 'px';
-          box.style.top = p.y + 'px';
-          box.style.width = p.w + 'px';
-          box.style.height = p.h + 'px';
-          // keep border applied (inner keeps border because we set it from data)
-          inner.style.border = (p.borderWidth || 0) + 'px solid ' + (p.borderColor || 'transparent');
-        });
-        document.addEventListener('mouseup', () => {
-          isResizing = false;
-        });
-
-        // Wheel zoom (cursor-centered)
-        box.addEventListener('wheel', (e) => {
-          e.preventDefault();
-          const posterRect = poster.getBoundingClientRect();
-          const cursorX = e.clientX - posterRect.left;
-          const cursorY = e.clientY - posterRect.top;
-
-          const fx = (cursorX - p.x) / p.w;
-          const fy = (cursorY - p.y) / p.h;
-
-          const scale = (e.deltaY < 0) ? 1.08 : 0.92;
-          let newW = p.w * scale;
-          if (newW < 40) newW = 40;
-          if (newW > 1600) newW = 1600;
-          const newH = Math.round(newW / p.ar);
-
-          const newX = cursorX - fx * newW;
-          const newY = cursorY - fy * newH;
-          p.w = newW;
-          p.h = newH;
-          p.x = newX;
-          p.y = newY;
-          img.style.width = p.w + 'px';
-          img.style.height = p.h + 'px';
-          inner.style.width = p.w + 'px';
-          inner.style.height = p.h + 'px';
-          box.style.left = p.x + 'px';
-          box.style.top = p.y + 'px';
-          box.style.width = p.w + 'px';
-          box.style.height = p.h + 'px';
-          inner.style.border = (p.borderWidth || 0) + 'px solid ' + (p.borderColor || 'transparent');
-        }, {
-          passive: false
-        });
-
-        poster.appendChild(box);
       });
 
-      applyFiltersToAllImages();
-    }
+      function onMove(e){
+        if(!resizing) return;
+        const dx = e.clientX - startClient.x;
+        // We will resize horizontally and compute height by aspect ratio
+        let newW = startProps.w, newH = startProps.h, newX = startProps.x, newY = startProps.y;
+        if (handleType === 'br') {
+          newW = startProps.w + dx;
+        } else if (handleType === 'bl') {
+          newW = startProps.w - dx;
+          newX = startProps.x + (startProps.w - newW);
+        } else if (handleType === 'tr') {
+          newW = startProps.w + dx;
+          newY = startProps.y + (startProps.h - Math.round((startProps.w + dx) / (p.ar || 1)));
+        } else if (handleType === 'tl') {
+          newW = startProps.w - dx;
+          newX = startProps.x + (startProps.w - newW);
+          newY = startProps.y + (startProps.h - Math.round(newW / (p.ar || 1)));
+        }
+
+        if (newW < 40) newW = 40;
+        if (newW > 1600) newW = 1600;
+        const newHcalc = Math.max(20, Math.round(newW / (p.ar || 1)));
+
+        // clamp to poster bounds
+        if (newX < 0) { newX = 0; }
+        if (newY < 0) { newY = 0; }
+        if (newX + newW > 1080) newW = 1080 - newX;
+        if (newY + newHcalc > 1080) { /* adjust height by reducing width */ newW = Math.min(newW, Math.round((1080 - newY) * (p.ar || 1))); }
+
+        // commit
+        p.w = Math.round(newW);
+        p.h = Math.round(p.w / (p.ar || 1));
+        p.x = Math.round(newX);
+        p.y = Math.round(newY);
+
+        box.style.width = p.w + 'px';
+        box.style.height = p.h + 'px';
+        box.style.left = p.x + 'px';
+        box.style.top = p.y + 'px';
+        inner.style.width = p.w + 'px';
+        inner.style.height = p.h + 'px';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        inner.style.border = (p.borderWidth || 0) + 'px solid ' + (p.borderColor || 'transparent');
+      }
+
+      function onUp(e){
+        if(!resizing) return;
+        try{ box.releasePointerCapture(e.pointerId); }catch(e){}
+        resizing = false;
+      }
+
+      // global pointer listeners to allow dragging outside small handle area
+      box.addEventListener('pointermove', onMove);
+      box.addEventListener('pointerup', onUp);
+      box.addEventListener('pointercancel', onUp);
+      // also attach to document so move works if pointer leaves box
+      document.addEventListener('pointermove', onMove);
+      document.addEventListener('pointerup', onUp);
+    })();
+
+    // wheel zoom (cursor-centered)
+    box.addEventListener('wheel', (e)=>{
+      e.preventDefault();
+      const posterRect = poster.getBoundingClientRect();
+      const cursorX = e.clientX - posterRect.left;
+      const cursorY = e.clientY - posterRect.top;
+
+      // compute fraction inside box
+      const fx = (cursorX - p.x) / p.w;
+      const fy = (cursorY - p.y) / p.h;
+
+      const scale = (e.deltaY < 0) ? 1.08 : 0.92;
+      let newW = p.w * scale;
+      if (newW < 40) newW = 40;
+      if (newW > 1600) newW = 1600;
+      const newH = Math.round(newW / (p.ar || 1));
+
+      const newX = cursorX - fx * newW;
+      const newY = cursorY - fy * newH;
+
+      // clamp
+      p.w = Math.round(newW);
+      p.h = Math.round(newH);
+      p.x = Math.round(Math.min(Math.max(0, newX), 1080 - p.w));
+      p.y = Math.round(Math.min(Math.max(0, newY), 1080 - p.h));
+
+      box.style.left = p.x + 'px';
+      box.style.top  = p.y + 'px';
+      box.style.width = p.w + 'px';
+      box.style.height = p.h + 'px';
+      inner.style.width = p.w + 'px';
+      inner.style.height = p.h + 'px';
+      inner.style.border = (p.borderWidth || 0) + 'px solid ' + (p.borderColor || 'transparent');
+    }, { passive:false });
+
+    // append to poster
+    poster.appendChild(box);
+  });
+
+  // apply global filters after all images appended
+  applyFiltersToAllImages();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     /* ================== CROP EDITOR ================== */
     function openEditorById(id) {
