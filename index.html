@@ -15,7 +15,7 @@
   <!-- BodyPix / TensorFlow (for client-side BG removal - unused here but kept) -->
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.8.0/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.0.5/dist/body-pix.min.js"></script>
-  <script src="undo-redo.js" defer></script>
+
 
   <style>
     :root {
@@ -817,6 +817,22 @@
     transform: scale(0.96);
 }
 
+
+
+.input-with-eye {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.eye-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+}
+
+
     
   </style>
 </head>
@@ -871,7 +887,12 @@
       <h3>🖋️ Text (Title & Branch)</h3>
       <div class="row">
         <div class="full">
-          <label>Event Name</label>
+          <label>Event Name
+		  <button id="toggleEventName" type="button" title="Show / Hide Event Name">👁</button>
+		  </label>
+		  
+
+		  
           <input type="text" id="eventName" placeholder="Enter Event Name" />
         </div>
         <div>
@@ -906,8 +927,12 @@
       <hr style="border:none;border-top:1px solid #eee;margin:12px 0">
       <div class="row">
         <div class="full">
-          <label>Branch Name</label>
+          <label>Branch Name
+		  <button id="toggleBranchName" type="button" title="Show / Hide Branch Name">👁</button>
+		  </label>
           <input type="text" id="branchName" placeholder="Enter Branch Name" />
+		   
+		  
         </div>
         <div>
           <label>Branch Color</label>
@@ -1499,6 +1524,7 @@
     /* ================== STATE ================== */
     let cropper = null,
       currentEditingIndex = -1;
+	  let isResizing = false;
     const poster = document.getElementById('poster');
     // Replace your existing addImageStickerFromUrl with this version.
     // This version DOES NOT auto-close the sticker panel when a thumbnail is clicked.
@@ -4537,17 +4563,49 @@
 })();
 
 
-    
+
+
+/* ===============================
+   👁 Event & Branch Toggle Logic
+   =============================== */
+
+const toggleEventBtn = document.getElementById("toggleEventName");
+const toggleBranchBtn = document.getElementById("toggleBranchName");
+
+const eventEl = document.getElementById("title");
+const branchEl = document.getElementById("branch");
+
+// helper toggle function
+function toggleVisibility(el, btn) {
+  if (!el) return;
+
+  const isHidden = el.style.display === "none";
+
+  if (isHidden) {
+    el.style.display = "block";
+    btn.textContent = "👁";   // visible
+  } else {
+    el.style.display = "none";
+    btn.textContent = "🚫";   // hidden
+  }
+}
+
+// Event name toggle
+toggleEventBtn && toggleEventBtn.addEventListener("click", () => {
+  toggleVisibility(eventEl, toggleEventBtn);
+});
+
+// Branch name toggle
+toggleBranchBtn && toggleBranchBtn.addEventListener("click", () => {
+  toggleVisibility(branchEl, toggleBranchBtn);
+});
+
+	
   </script>
+
 
 
 </body>
 
 </html>
-
-
-
-
-
-
 
