@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -856,6 +857,17 @@
       </div>
 
     </div>
+
+
+	<!-- =======================
+     LOGO SELECT (ADD HERE)
+     ======================= -->
+<div class="control-group">
+  <label for="logoDropdown"><b style = "Color:#fff;">Select Logo</b></label>
+  <select id="logoDropdown">
+    <option value="">-- Select Logo --</option>
+  </select>
+</div>
 
 
 
@@ -4599,6 +4611,52 @@ toggleEventBtn && toggleEventBtn.addEventListener("click", () => {
 toggleBranchBtn && toggleBranchBtn.addEventListener("click", () => {
   toggleVisibility(branchEl, toggleBranchBtn);
 });
+
+	
+	//custom logo script
+	
+	document.addEventListener("DOMContentLoaded", function () {
+
+  const logos = [
+    {
+      name: "Sri Chaitanya Collage Logo",
+      src: "https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/1.png"
+    },
+    {
+      name: "Infinity Learn",
+      src: "https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/4.png"
+    },
+    {
+      name: "E Techno Schools",
+      src: "https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/1.png"
+    }
+  ];
+
+  const dropdown = document.getElementById("logoDropdown");
+  const posterLogo = document.getElementById("logo"); // ✅ correct target
+
+  if (!dropdown || !posterLogo) {
+    console.warn("logoDropdown or #logo not found");
+    return;
+  }
+
+  /* populate dropdown */
+  logos.forEach((l, i) => {
+    const opt = document.createElement("option");
+    opt.value = i;
+    opt.textContent = l.name;
+    dropdown.appendChild(opt);
+  });
+
+  /* replace poster logo only */
+  dropdown.addEventListener("change", function () {
+    if (this.value === "") return;
+    posterLogo.src = logos[this.value].src;
+  });
+
+});
+	
+	
 
 	
   </script>
