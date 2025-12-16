@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -191,6 +192,7 @@
 
     /* ===== Poster (1080 x 1080) ===== */
     #poster {
+	  box-sizing: content-box;   /* VERY IMPORTANT */
       width: 1080px;
       height: 1080px;
       background: #fff;
@@ -200,12 +202,13 @@
       position: relative;
       touch-action: none;
       /* improves drag on mobile */
+	 
     }
 
     #logo {
       object-fit: contain;
       margin-bottom: 10px;
-      margin-top: -22px;
+      
     }
 
     #title,
@@ -245,6 +248,9 @@
 
     /* ===== Free-move Image Boxes ===== */
     .image-box {
+	  width: 300px;
+  height: 220px;
+	 box-sizing: border-box;
       position: absolute;
       display: inline-block;
       border: 2px solid transparent;
@@ -776,7 +782,7 @@
 
       /* Visible on white: use dark translucent color + subtle shadow */
       color: rgba(0, 0, 0, 0.18);
-      opacity: 0.5;
+      opacity: 0.25;
 
       /* subtle outline to make it legible on both dark and light backgrounds */
       text-shadow:
@@ -1339,6 +1345,11 @@
       <button class="ghost" id="closeCropBtn">Cancel</button>
     </div>
   </div>
+  
+  
+  
+  
+  
 
   <!-- Scripts -->
   <script src="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.js"></script>
@@ -4654,18 +4665,161 @@ toggleBranchBtn && toggleBranchBtn.addEventListener("click", () => {
   });
 
 });
-		
 	
-  </script>
+	
+document.getElementById("shareWhatsappBtn").addEventListener("click", async () => {
+
+  const poster = document.getElementById("poster");
+  if (!poster) {
+    alert("Poster not found");
+    return;
+  }
+
+  /* ===============================
+     1️⃣ CLONE POSTER (KEY FIX)
+     =============================== */
+  const clone = poster.cloneNode(true);
+  clone.id = "poster-clone";
+
+  Object.assign(clone.style, {
+    transform: "none",
+    width: "1080px",
+    height: "1080px",
+    position: "fixed",
+    left: "-99999px",
+    top: "0",
+    boxShadow: "none"
+  });
+
+  document.body.appendChild(clone);
+
+  /* ===============================
+     2️⃣ REMOVE ALL EDITOR UI FROM CLONE
+     =============================== */
+  const removeSelectors = [
+    ".ibtn",
+    ".handle",
+    ".flip-btn",
+    ".crop-btn",
+    ".sticker-del",
+    ".sticker-flip",
+    ".shape-del",
+    ".shape-handle",
+    ".txt-del"
+  ];
+
+  removeSelectors.forEach(sel => {
+    clone.querySelectorAll(sel).forEach(el => el.remove());
+  });
+
+  /* remove selection / hover styles */
+  clone.querySelectorAll(".image-box").forEach(box => {
+    box.classList.remove("selected");
+    box.style.outline = "none";
+  });
+
+  /* disable hover zoom effects */
+  clone.querySelectorAll(".image-box img").forEach(img => {
+    img.style.transform = "none";
+    img.style.boxShadow = "none";
+  });
+
+  /* ===============================
+     3️⃣ CAPTURE CLONE ONLY
+     =============================== */
+  const canvas = await html2canvas(clone, {
+    scale: 2,
+    backgroundColor: null,
+    useCORS: true
+  });
+
+  /* ===============================
+     4️⃣ CLEANUP
+     =============================== */
+  clone.remove();
+
+  /* ===============================
+     5️⃣ SHARE AS JPG
+     =============================== */
+  canvas.toBlob(async blob => {
+    if (!blob) return alert("Export failed");
+
+    const file = new File([blob], "poster.jpg", {
+      type: "image/jpeg"
+    });
+
+    /* 📱 MOBILE */
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file] });
+    }
+    /* 💻 DESKTOP */
+    else {
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "poster.jpg";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+
+      window.open("https://web.whatsapp.com", "_blank");
+    }
+  }, "image/jpeg", 0.95);
+
+});
+
+	
+	
+/* =========================================================
+   🔒 IMAGE LOCK INSIDE POSTER (NO EXISTING CODE DISTURB)
+   Keeps .image-box always inside 1080x1080 poster
+   ========================================================= */
+(function () {
+  const POSTER_SIZE = 1080;
+  const poster = document.getElementById("poster");
+  if (!poster) return;
+
+  function lockImages() {
+    const posterRect = poster.getBoundingClientRect();
+    const scale = posterRect.width / POSTER_SIZE;
+
+    document.querySelectorAll(".image-box").forEach(box => {
+      let left = parseFloat(box.style.left) || 0;
+      let top  = parseFloat(box.style.top)  || 0;
+
+      const rect = box.getBoundingClientRect();
+      const w = rect.width / scale;
+      const h = rect.height / scale;
+
+      // clamp inside poster
+      if (left < 0) left = 0;
+      if (top < 0) top = 0;
+      if (left + w > POSTER_SIZE) left = POSTER_SIZE - w;
+      if (top + h > POSTER_SIZE) top = POSTER_SIZE - h;
+
+      box.style.left = left + "px";
+      box.style.top  = top  + "px";
+    });
+  }
+
+  // run continuously without disturbing drag/resize
+  (function loop() {
+    lockImages();
+    requestAnimationFrame(loop);
+  })();
+
+})();	
+
+
+
+</script>
+
+
 
 
 
 </body>
 
 </html>
-
-
-
-
-
 
