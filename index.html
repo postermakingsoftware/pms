@@ -4702,7 +4702,7 @@ toggleBranchBtn && toggleBranchBtn.addEventListener("click", () => {
   const logos = [
     {
       name: "Sri Chaitanya Collage Logo",
-      src: "https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/18.png"
+      src: "https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/1.png"
     },
     {
       name: "Infinity Learn",
@@ -4847,48 +4847,14 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
 
 <script>
 /* =========================================================
-   FINAL PATCH – IMAGES + STICKERS (PRODUCTION SAFE)
+   FINAL STICKER SYSTEM – DESKTOP + MOBILE PERFECT
    ========================================================= */
 (function () {
 
-  const POSTER_SIZE = 1080;
   const poster = document.getElementById("poster");
-  if (!poster) return;
-
-  /* =====================================================
-     🔒 IMAGE LOCK INSIDE POSTER (EVENT BASED – NO LAG)
-     ===================================================== */
-  function lockImages() {
-    const posterRect = poster.getBoundingClientRect();
-    const scale = posterRect.width / POSTER_SIZE;
-
-    document.querySelectorAll(".image-box").forEach(box => {
-      let left = parseFloat(box.style.left) || 0;
-      let top  = parseFloat(box.style.top)  || 0;
-
-      const rect = box.getBoundingClientRect();
-      const w = rect.width / scale;
-      const h = rect.height / scale;
-
-      if (left < 0) left = 0;
-      if (top < 0) top = 0;
-      if (left + w > POSTER_SIZE) left = POSTER_SIZE - w;
-      if (top + h > POSTER_SIZE) top = POSTER_SIZE - h;
-
-      box.style.left = left + "px";
-      box.style.top  = top  + "px";
-    });
-  }
-
-  ["mouseup", "touchend", "pointerup"].forEach(ev => {
-    document.addEventListener(ev, lockImages, true);
-  });
-
-  /* =====================================================
-     🧷 STICKER SYSTEM (TOOLBAR + RESIZE + MOBILE FIX)
-     ===================================================== */
   let activeSticker = null;
 
+  /* ================= SELECTION ================= */
   document.addEventListener("pointerdown", e => {
     const s = e.target.closest(".sticker");
 
@@ -4898,19 +4864,12 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
     if (s) {
       s.classList.add("selected");
       activeSticker = s;
-
-      hideOldStickerButtons(s);
       addToolbar(s);
       addResizeHandles(s);
     }
   });
 
-  function hideOldStickerButtons(sticker) {
-    sticker.querySelectorAll(".sticker-del, .sticker-flip")
-      .forEach(el => el.style.display = "none");
-  }
-
-  /* ---------- Toolbar ---------- */
+  /* ================= TOOLBAR ================= */
   function addToolbar(sticker) {
     if (sticker.querySelector(".sticker-toolbar")) return;
 
@@ -4918,8 +4877,8 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
     bar.className = "sticker-toolbar";
 
     bar.append(
-      makeBtn("⟲", () => rotateSticker(sticker)),
-      makeBtn("↔", () => flipSticker(sticker)),
+      makeBtn("⟲", () => rotate(sticker)),
+      makeBtn("↔", () => flip(sticker)),
       makeBtn("✖", () => sticker.remove(), "#ff4d4d")
     );
 
@@ -4930,30 +4889,47 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
     const b = document.createElement("button");
     b.textContent = txt;
     if (bg) b.style.background = bg;
-    b.onclick = e => { e.stopPropagation(); fn(); };
+
+    b.addEventListener("pointerdown", e => {
+      e.stopPropagation();
+      e.preventDefault();
+      fn();
+    });
+
     return b;
   }
 
-  /* ---------- Rotate / Flip ---------- */
-  function rotateSticker(sticker) {
-    const cur = parseInt(sticker.dataset.rot || "0", 10);
-    sticker.dataset.rot = cur + 15;
+  /* ================= TRANSFORM STATE ================= */
+  function getState(sticker) {
+    return {
+      rot: parseFloat(sticker.dataset.rot || 0),
+      scale: parseFloat(sticker.dataset.scale || 1),
+      flip: sticker.dataset.flip === "1" ? -1 : 1
+    };
+  }
+
+  function applyTransform(sticker) {
+    const { rot, scale, flip } = getState(sticker);
+
+    const img = sticker.querySelector("img");
+    if (img) {
+      img.style.transform = `rotate(${rot}deg) scaleX(${flip})`;
+    }
+
+    sticker.style.transform = `scale(${scale})`;
+  }
+
+  function rotate(sticker) {
+    sticker.dataset.rot = getState(sticker).rot + 15;
     applyTransform(sticker);
   }
 
-  function flipSticker(sticker) {
+  function flip(sticker) {
     sticker.dataset.flip = sticker.dataset.flip === "1" ? "0" : "1";
     applyTransform(sticker);
   }
 
-  function applyTransform(sticker) {
-    const r = parseInt(sticker.dataset.rot || "0", 10);
-    const f = sticker.dataset.flip === "1" ? -1 : 1;
-    const img = sticker.querySelector("img");
-    if (img) img.style.transform = `rotate(${r}deg) scaleX(${f})`;
-  }
-
-  /* ---------- Corner Resize (POINTER EVENTS – MOBILE SAFE) ---------- */
+  /* ================= RESIZE ================= */
   function addResizeHandles(sticker) {
     if (sticker.querySelector(".s-handle")) return;
 
@@ -4967,70 +4943,64 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
   }
 
   function bindResize(sticker, handle, pos) {
-    let startX = 0, startW = 0;
-    let resizing = false;
+    let startX, startW, startScale, isTouch;
 
     handle.addEventListener("pointerdown", e => {
-      e.preventDefault();
       e.stopPropagation();
+      e.preventDefault();
 
-      const img = sticker.querySelector("img");
-      if (!img) return;
-
-      resizing = true;
       handle.setPointerCapture(e.pointerId);
 
+      const img = sticker.querySelector("img");
       startX = e.clientX;
       startW = img.offsetWidth;
+      startScale = getState(sticker).scale;
+      isTouch = e.pointerType === "touch";
     });
 
     handle.addEventListener("pointermove", e => {
-      if (!resizing) return;
+      if (!handle.hasPointerCapture(e.pointerId)) return;
 
       const img = sticker.querySelector("img");
-      if (!img) return;
-
       let diff = e.clientX - startX;
+
       if (pos === "tl" || pos === "bl") diff = -diff;
 
-      let w = startW + diff;
-      if (w < 40) w = 40;
-      if (w > 900) w = 900;
-
-      img.style.width = w + "px";
+      /* 🖱 Desktop = pixel resize */
+      if (!isTouch) {
+        let w = startW + diff;
+        if (w < 40) w = 40;
+        img.style.width = w + "px";
+      }
+      /* 📱 Mobile = scale resize */
+      else {
+        let scale = Math.max(0.2, startScale + diff / 250);
+        sticker.dataset.scale = scale;
+        applyTransform(sticker);
+      }
     });
 
-    function stop(e) {
-      resizing = false;
-      try { handle.releasePointerCapture(e.pointerId); } catch {}
-    }
-
-    handle.addEventListener("pointerup", stop);
-    handle.addEventListener("pointercancel", stop);
+    handle.addEventListener("pointerup", () => {
+      try { handle.releasePointerCapture(event.pointerId); } catch {}
+    });
   }
 
-  /* =====================================================
-     🧼 CLEAN EXPORT (DOWNLOAD / WHATSAPP)
-     ===================================================== */
+  /* ================= CLEAN EXPORT ================= */
   function forceCleanExport() {
     poster.classList.add("exporting");
-
     document.querySelectorAll(".selected")
       .forEach(el => el.classList.remove("selected"));
-
-    setTimeout(() => {
-      poster.classList.remove("exporting");
-    }, 1800);
+    setTimeout(() => poster.classList.remove("exporting"), 1500);
   }
 
-  ["downloadBtn", "shareWhatsappBtn"].forEach(id => {
+  ["downloadBtn","shareWhatsappBtn"].forEach(id => {
     const btn = document.getElementById(id);
-    if (!btn) return;
-    btn.addEventListener("click", forceCleanExport, true);
+    if (btn) btn.addEventListener("click", forceCleanExport, true);
   });
 
 })();
 </script>
+
 
 
 
