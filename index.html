@@ -837,7 +837,78 @@
   cursor: pointer;
   font-size: 18px;
 }
+/* =========================================================
+   STICKER FINAL CSS
+   ========================================================= */
 
+/* Selection */
+.sticker.selected {
+  outline: 1px dashed #00bfff;
+}
+
+/* Corner resize handles */
+.sticker .s-handle {
+  width: 14px;
+  height: 14px;
+  background: #00bfff;
+  position: absolute;
+  border-radius: 50%;
+  display: none;
+  z-index: 9999;
+}
+
+.sticker.selected .s-handle {
+  display: block;
+}
+
+.s-handle.tl { top: -7px; left: -7px; cursor: nwse-resize; }
+.s-handle.tr { top: -7px; right: -7px; cursor: nesw-resize; }
+.s-handle.bl { bottom: -7px; left: -7px; cursor: nesw-resize; }
+.s-handle.br { bottom: -7px; right: -7px; cursor: nwse-resize; }
+
+/* Top toolbar */
+.sticker-toolbar {
+  position: absolute;
+  top: -40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: none;
+  gap: 6px;
+  z-index: 10000;
+}
+
+.sticker.selected .sticker-toolbar {
+  display: flex;
+}
+
+.sticker-toolbar button {
+  background: #00bfff;
+  border: none;
+  color: #fff;
+  font-size: 13px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Disable old buttons */
+.sticker-del,
+.sticker-flip {
+  display: none !important;
+}
+
+/* Export clean */
+#poster.exporting *,
+#poster.exporting .sticker.selected {
+  outline: none !important;
+}
+
+#poster.exporting .handle,
+#poster.exporting .s-handle,
+#poster.exporting .shape-handle,
+#poster.exporting .sticker-toolbar {
+  display: none !important;
+}
 
     
   </style>
@@ -1548,6 +1619,7 @@
       currentEditingIndex = -1;
 	  let isResizing = false;
     const poster = document.getElementById('poster');
+
     // Replace your existing addImageStickerFromUrl with this version.
     // This version DOES NOT auto-close the sticker panel when a thumbnail is clicked.
     // If you want auto-close behavior for specific thumbnails, call addImageStickerFromUrl(url, { autoClose: true })
@@ -4638,7 +4710,7 @@ toggleBranchBtn && toggleBranchBtn.addEventListener("click", () => {
     },
     {
       name: "E Techno Schools",
-      src: "https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/11.png"
+      src: "https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/1.png"
     }
   ];
 
@@ -4675,8 +4747,12 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
     return;
   }
 
+  /* 🔒 TEMP FIX FOR BORDER ISSUE */
+  const oldBox = poster.style.boxSizing;
+  poster.style.boxSizing = "border-box";
+
   /* ===============================
-     1️⃣ CLONE POSTER (KEY FIX)
+     1️⃣ CLONE POSTER
      =============================== */
   const clone = poster.cloneNode(true);
   clone.id = "poster-clone";
@@ -4694,7 +4770,7 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
   document.body.appendChild(clone);
 
   /* ===============================
-     2️⃣ REMOVE ALL EDITOR UI FROM CLONE
+     2️⃣ REMOVE EDITOR UI FROM CLONE
      =============================== */
   const removeSelectors = [
     ".ibtn",
@@ -4712,20 +4788,18 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
     clone.querySelectorAll(sel).forEach(el => el.remove());
   });
 
-  /* remove selection / hover styles */
   clone.querySelectorAll(".image-box").forEach(box => {
     box.classList.remove("selected");
     box.style.outline = "none";
   });
 
-  /* disable hover zoom effects */
   clone.querySelectorAll(".image-box img").forEach(img => {
     img.style.transform = "none";
     img.style.boxShadow = "none";
   });
 
   /* ===============================
-     3️⃣ CAPTURE CLONE ONLY
+     3️⃣ CAPTURE CLONE
      =============================== */
   const canvas = await html2canvas(clone, {
     scale: 2,
@@ -4734,9 +4808,10 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
   });
 
   /* ===============================
-     4️⃣ CLEANUP
+     4️⃣ CLEANUP + RESTORE
      =============================== */
   clone.remove();
+  poster.style.boxSizing = oldBox || "content-box";
 
   /* ===============================
      5️⃣ SHARE AS JPG
@@ -4744,30 +4819,27 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
   canvas.toBlob(async blob => {
     if (!blob) return alert("Export failed");
 
-    const file = new File([blob], "poster.jpg", {
-      type: "image/jpeg"
-    });
+    const file = new File([blob], "poster.jpg", { type: "image/jpeg" });
 
-    /* 📱 MOBILE */
+    /* 📱 MOBILE SHARE */
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       await navigator.share({ files: [file] });
     }
-    /* 💻 DESKTOP */
+    /* 💻 DESKTOP FALLBACK */
     else {
       const url = URL.createObjectURL(blob);
-
       const a = document.createElement("a");
       a.href = url;
       a.download = "poster.jpg";
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-
       window.open("https://web.whatsapp.com", "_blank");
     }
   }, "image/jpeg", 0.95);
 
 });
+
 
 	
 	
@@ -4811,9 +4883,164 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
 
 })();	
 
+/* =========================================================
+   STICKER FINAL PATCH
+   - Top Toolbar (Rotate / Flip / Close)
+   - Corner Resize (Correct Direction)
+   - Old Buttons Disabled
+   - Clean Download / WhatsApp Export
+   ========================================================= */
+(function () {
 
+  const poster = document.getElementById("poster");
+  let activeSticker = null;
+
+  /* ----------------- SELECTION ----------------- */
+  document.addEventListener("click", e => {
+    const s = e.target.closest(".sticker");
+
+    document.querySelectorAll(".sticker").forEach(x => x.classList.remove("selected"));
+
+    if (s) {
+      s.classList.add("selected");
+      activeSticker = s;
+
+      hideOldStickerButtons(s);
+      addToolbar(s);
+      addResizeHandles(s);
+    }
+  });
+
+  function hideOldStickerButtons(sticker) {
+    sticker.querySelectorAll(".sticker-del, .sticker-flip")
+      .forEach(el => el.style.display = "none");
+  }
+
+  /* ----------------- TOOLBAR ----------------- */
+  function addToolbar(sticker) {
+    if (sticker.querySelector(".sticker-toolbar")) return;
+
+    const bar = document.createElement("div");
+    bar.className = "sticker-toolbar";
+
+    bar.append(
+      makeBtn("⟲", () => rotateSticker(sticker)),
+      makeBtn("↔", () => flipSticker(sticker)),
+      makeBtn("✖", () => sticker.remove(), "#ff4d4d")
+    );
+
+    sticker.appendChild(bar);
+  }
+
+  function makeBtn(txt, fn, bg) {
+    const b = document.createElement("button");
+    b.textContent = txt;
+    if (bg) b.style.background = bg;
+    b.onclick = e => { e.stopPropagation(); fn(); };
+    return b;
+  }
+
+  /* ----------------- ROTATE / FLIP ----------------- */
+  function rotateSticker(sticker) {
+    const cur = parseInt(sticker.dataset.rot || "0", 10);
+    sticker.dataset.rot = cur + 15;
+    applyTransform(sticker);
+  }
+
+  function flipSticker(sticker) {
+    sticker.dataset.flip = sticker.dataset.flip === "1" ? "0" : "1";
+    applyTransform(sticker);
+  }
+
+  function applyTransform(sticker) {
+    const r = parseInt(sticker.dataset.rot || "0", 10);
+    const f = sticker.dataset.flip === "1" ? -1 : 1;
+    const img = sticker.querySelector("img");
+    if (img) img.style.transform = `rotate(${r}deg) scaleX(${f})`;
+  }
+
+  /* ----------------- CORNER RESIZE ----------------- */
+  function addResizeHandles(sticker) {
+    if (sticker.querySelector(".s-handle")) return;
+
+    ["tl","tr","bl","br"].forEach(pos => {
+      const h = document.createElement("div");
+      h.className = "s-handle " + pos;
+      sticker.appendChild(h);
+      bindResize(sticker, h, pos);
+    });
+  }
+
+  function bindResize(sticker, handle, pos) {
+    let startX = 0, startW = 0;
+
+    function start(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const img = sticker.querySelector("img");
+      if (!img) return;
+
+      startX = e.touches ? e.touches[0].clientX : e.clientX;
+      startW = img.offsetWidth;
+
+      document.addEventListener("mousemove", move);
+      document.addEventListener("mouseup", stop);
+      document.addEventListener("touchmove", move, { passive:false });
+      document.addEventListener("touchend", stop);
+    }
+
+    function move(e) {
+      const img = sticker.querySelector("img");
+      if (!img) return;
+
+      const x = e.touches ? e.touches[0].clientX : e.clientX;
+      let diff = x - startX;
+
+      /* FIX direction */
+      if (pos === "tl" || pos === "bl") diff = -diff;
+
+      let w = startW + diff;
+      if (w < 40) w = 40;
+      if (w > 900) w = 900;
+
+      img.style.width = w + "px";
+    }
+
+    function stop() {
+      document.removeEventListener("mousemove", move);
+      document.removeEventListener("mouseup", stop);
+      document.removeEventListener("touchmove", move);
+      document.removeEventListener("touchend", stop);
+    }
+
+    handle.addEventListener("mousedown", start);
+    handle.addEventListener("touchstart", start, { passive:false });
+  }
+
+  /* ----------------- CLEAN EXPORT ----------------- */
+  function forceCleanExport() {
+    poster.classList.add("exporting");
+
+    // remove selection immediately
+    document.querySelectorAll(".selected")
+      .forEach(el => el.classList.remove("selected"));
+
+    setTimeout(() => {
+      poster.classList.remove("exporting");
+    }, 1800);
+  }
+
+  ["downloadBtn", "shareWhatsappBtn"].forEach(id => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener("click", forceCleanExport, true);
+  });
+
+})();
 
 </script>
+
 
 
 
@@ -4822,6 +5049,4 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
 </body>
 
 </html>
-
-
 
