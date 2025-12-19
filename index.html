@@ -4847,14 +4847,14 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
 
 <script>
 /* =========================================================
-   FINAL STICKER SYSTEM – DESKTOP + MOBILE PERFECT
+   FINAL STICKER SYSTEM – MOBILE & DESKTOP (STABLE)
    ========================================================= */
 (function () {
 
   const poster = document.getElementById("poster");
   let activeSticker = null;
 
-  /* ================= SELECTION ================= */
+  /* ================= SELECT ================= */
   document.addEventListener("pointerdown", e => {
     const s = e.target.closest(".sticker");
 
@@ -4899,28 +4899,10 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
     return b;
   }
 
-  /* ================= TRANSFORM STATE ================= */
-  function getState(sticker) {
-    return {
-      rot: parseFloat(sticker.dataset.rot || 0),
-      scale: parseFloat(sticker.dataset.scale || 1),
-      flip: sticker.dataset.flip === "1" ? -1 : 1
-    };
-  }
-
-  function applyTransform(sticker) {
-    const { rot, scale, flip } = getState(sticker);
-
-    const img = sticker.querySelector("img");
-    if (img) {
-      img.style.transform = `rotate(${rot}deg) scaleX(${flip})`;
-    }
-
-    sticker.style.transform = `scale(${scale})`;
-  }
-
+  /* ================= ROTATE / FLIP ================= */
   function rotate(sticker) {
-    sticker.dataset.rot = getState(sticker).rot + 15;
+    const r = parseInt(sticker.dataset.rot || 0) + 15;
+    sticker.dataset.rot = r;
     applyTransform(sticker);
   }
 
@@ -4929,21 +4911,28 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
     applyTransform(sticker);
   }
 
-  /* ================= RESIZE ================= */
+  function applyTransform(sticker) {
+    const r = parseInt(sticker.dataset.rot || 0);
+    const f = sticker.dataset.flip === "1" ? -1 : 1;
+    const img = sticker.querySelector("img");
+    if (img) img.style.transform = `rotate(${r}deg) scaleX(${f})`;
+  }
+
+  /* ================= CORNER RESIZE (PIXEL BASED) ================= */
   function addResizeHandles(sticker) {
     if (sticker.querySelector(".s-handle")) return;
 
     ["tl","tr","bl","br"].forEach(pos => {
       const h = document.createElement("div");
       h.className = "s-handle " + pos;
-      h.style.touchAction = "none";
+      h.style.touchAction = "none"; // 🔥 mobile key
       sticker.appendChild(h);
       bindResize(sticker, h, pos);
     });
   }
 
   function bindResize(sticker, handle, pos) {
-    let startX, startW, startScale, isTouch;
+    let startX = 0, startW = 0;
 
     handle.addEventListener("pointerdown", e => {
       e.stopPropagation();
@@ -4952,36 +4941,30 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
       handle.setPointerCapture(e.pointerId);
 
       const img = sticker.querySelector("img");
+      if (!img) return;
+
       startX = e.clientX;
       startW = img.offsetWidth;
-      startScale = getState(sticker).scale;
-      isTouch = e.pointerType === "touch";
     });
 
     handle.addEventListener("pointermove", e => {
       if (!handle.hasPointerCapture(e.pointerId)) return;
 
       const img = sticker.querySelector("img");
-      let diff = e.clientX - startX;
+      if (!img) return;
 
+      let diff = e.clientX - startX;
       if (pos === "tl" || pos === "bl") diff = -diff;
 
-      /* 🖱 Desktop = pixel resize */
-      if (!isTouch) {
-        let w = startW + diff;
-        if (w < 40) w = 40;
-        img.style.width = w + "px";
-      }
-      /* 📱 Mobile = scale resize */
-      else {
-        let scale = Math.max(0.2, startScale + diff / 250);
-        sticker.dataset.scale = scale;
-        applyTransform(sticker);
-      }
+      let w = startW + diff;
+      if (w < 40) w = 40;
+      if (w > 900) w = 900;
+
+      img.style.width = w + "px";
     });
 
-    handle.addEventListener("pointerup", () => {
-      try { handle.releasePointerCapture(event.pointerId); } catch {}
+    handle.addEventListener("pointerup", e => {
+      try { handle.releasePointerCapture(e.pointerId); } catch {}
     });
   }
 
@@ -5000,6 +4983,7 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
 
 })();
 </script>
+
 
 
 
