@@ -910,6 +910,38 @@
   display: none !important;
 }
 
+
+
+
+
+	  /* =========================================================
+   STICKER TOOLBAR – MOBILE FRIENDLY SIZE
+   ========================================================= */
+
+/* Default (Desktop) */
+.sticker-toolbar button {
+  font-size: 13px;
+  padding: 4px 7px;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+/* Mobile improvement */
+@media (max-width: 768px) {
+  .sticker-toolbar {
+    top: -48px;                 /* little more gap */
+    gap: 10px;
+  }
+
+  .sticker-toolbar button {
+    font-size: 18px;            /* bigger icon */
+    padding: 10px 12px;         /* big touch area */
+    min-width: 42px;
+    min-height: 42px;
+    border-radius: 10px;
+  }
+}
+
     
   </style>
 </head>
@@ -4995,4 +5027,5 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
 </body>
 
 </html>
+
 
