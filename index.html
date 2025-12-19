@@ -4843,15 +4843,21 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
 
 	
 	
+</script>
+
+<script>
 /* =========================================================
-   🔒 IMAGE LOCK INSIDE POSTER (NO EXISTING CODE DISTURB)
-   Keeps .image-box always inside 1080x1080 poster
+   FINAL PATCH – IMAGES + STICKERS (PRODUCTION SAFE)
    ========================================================= */
 (function () {
+
   const POSTER_SIZE = 1080;
   const poster = document.getElementById("poster");
   if (!poster) return;
 
+  /* =====================================================
+     🔒 IMAGE LOCK INSIDE POSTER (EVENT BASED – NO LAG)
+     ===================================================== */
   function lockImages() {
     const posterRect = poster.getBoundingClientRect();
     const scale = posterRect.width / POSTER_SIZE;
@@ -4864,7 +4870,6 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
       const w = rect.width / scale;
       const h = rect.height / scale;
 
-      // clamp inside poster
       if (left < 0) left = 0;
       if (top < 0) top = 0;
       if (left + w > POSTER_SIZE) left = POSTER_SIZE - w;
@@ -4875,31 +4880,20 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
     });
   }
 
-  // run continuously without disturbing drag/resize
-  (function loop() {
-    lockImages();
-    requestAnimationFrame(loop);
-  })();
+  ["mouseup", "touchend", "pointerup"].forEach(ev => {
+    document.addEventListener(ev, lockImages, true);
+  });
 
-})();	
-
-/* =========================================================
-   STICKER FINAL PATCH
-   - Top Toolbar (Rotate / Flip / Close)
-   - Corner Resize (Correct Direction)
-   - Old Buttons Disabled
-   - Clean Download / WhatsApp Export
-   ========================================================= */
-(function () {
-
-  const poster = document.getElementById("poster");
+  /* =====================================================
+     🧷 STICKER SYSTEM (TOOLBAR + RESIZE + MOBILE FIX)
+     ===================================================== */
   let activeSticker = null;
 
-  /* ----------------- SELECTION ----------------- */
-  document.addEventListener("click", e => {
+  document.addEventListener("pointerdown", e => {
     const s = e.target.closest(".sticker");
 
-    document.querySelectorAll(".sticker").forEach(x => x.classList.remove("selected"));
+    document.querySelectorAll(".sticker")
+      .forEach(x => x.classList.remove("selected"));
 
     if (s) {
       s.classList.add("selected");
@@ -4916,7 +4910,7 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
       .forEach(el => el.style.display = "none");
   }
 
-  /* ----------------- TOOLBAR ----------------- */
+  /* ---------- Toolbar ---------- */
   function addToolbar(sticker) {
     if (sticker.querySelector(".sticker-toolbar")) return;
 
@@ -4940,7 +4934,7 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
     return b;
   }
 
-  /* ----------------- ROTATE / FLIP ----------------- */
+  /* ---------- Rotate / Flip ---------- */
   function rotateSticker(sticker) {
     const cur = parseInt(sticker.dataset.rot || "0", 10);
     sticker.dataset.rot = cur + 15;
@@ -4959,13 +4953,14 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
     if (img) img.style.transform = `rotate(${r}deg) scaleX(${f})`;
   }
 
-  /* ----------------- CORNER RESIZE ----------------- */
+  /* ---------- Corner Resize (POINTER EVENTS – MOBILE SAFE) ---------- */
   function addResizeHandles(sticker) {
     if (sticker.querySelector(".s-handle")) return;
 
     ["tl","tr","bl","br"].forEach(pos => {
       const h = document.createElement("div");
       h.className = "s-handle " + pos;
+      h.style.touchAction = "none";
       sticker.appendChild(h);
       bindResize(sticker, h, pos);
     });
@@ -4973,31 +4968,29 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
 
   function bindResize(sticker, handle, pos) {
     let startX = 0, startW = 0;
+    let resizing = false;
 
-    function start(e) {
+    handle.addEventListener("pointerdown", e => {
       e.preventDefault();
       e.stopPropagation();
 
       const img = sticker.querySelector("img");
       if (!img) return;
 
-      startX = e.touches ? e.touches[0].clientX : e.clientX;
+      resizing = true;
+      handle.setPointerCapture(e.pointerId);
+
+      startX = e.clientX;
       startW = img.offsetWidth;
+    });
 
-      document.addEventListener("mousemove", move);
-      document.addEventListener("mouseup", stop);
-      document.addEventListener("touchmove", move, { passive:false });
-      document.addEventListener("touchend", stop);
-    }
+    handle.addEventListener("pointermove", e => {
+      if (!resizing) return;
 
-    function move(e) {
       const img = sticker.querySelector("img");
       if (!img) return;
 
-      const x = e.touches ? e.touches[0].clientX : e.clientX;
-      let diff = x - startX;
-
-      /* FIX direction */
+      let diff = e.clientX - startX;
       if (pos === "tl" || pos === "bl") diff = -diff;
 
       let w = startW + diff;
@@ -5005,24 +4998,23 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
       if (w > 900) w = 900;
 
       img.style.width = w + "px";
+    });
+
+    function stop(e) {
+      resizing = false;
+      try { handle.releasePointerCapture(e.pointerId); } catch {}
     }
 
-    function stop() {
-      document.removeEventListener("mousemove", move);
-      document.removeEventListener("mouseup", stop);
-      document.removeEventListener("touchmove", move);
-      document.removeEventListener("touchend", stop);
-    }
-
-    handle.addEventListener("mousedown", start);
-    handle.addEventListener("touchstart", start, { passive:false });
+    handle.addEventListener("pointerup", stop);
+    handle.addEventListener("pointercancel", stop);
   }
 
-  /* ----------------- CLEAN EXPORT ----------------- */
+  /* =====================================================
+     🧼 CLEAN EXPORT (DOWNLOAD / WHATSAPP)
+     ===================================================== */
   function forceCleanExport() {
     poster.classList.add("exporting");
 
-    // remove selection immediately
     document.querySelectorAll(".selected")
       .forEach(el => el.classList.remove("selected"));
 
@@ -5038,8 +5030,8 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
   });
 
 })();
-
 </script>
+
 
 
 
