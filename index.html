@@ -192,7 +192,7 @@
 
     /* ===== Poster (1080 x 1080) ===== */
     #poster {
-	  box-sizing: content-box;   /* VERY IMPORTANT */
+    box-sizing: content-box;   /* VERY IMPORTANT */
       width: 1080px;
       height: 1080px;
       background: #fff;
@@ -202,10 +202,14 @@
       position: relative;
       touch-action: none;
       /* improves drag on mobile */
-	 
+   
     }
 
-    #logo {
+     {
+      #logo {
+  pointer-events: none;
+}
+
       object-fit: contain;
       margin-bottom: 10px;
       
@@ -248,9 +252,9 @@
 
     /* ===== Free-move Image Boxes ===== */
     .image-box {
-	  width: 300px;
+    width: 300px;
   height: 220px;
-	 box-sizing: border-box;
+   box-sizing: border-box;
       position: absolute;
       display: inline-block;
       border: 2px solid transparent;
@@ -914,7 +918,7 @@
 
 
 
-	  /* =========================================================
+    /* =========================================================
    STICKER TOOLBAR – MOBILE FRIENDLY SIZE
    ========================================================= */
 
@@ -942,6 +946,78 @@
   }
 }
 
+
+
+
+
+
+/* ===== LOGO FOLDER ===== */
+
+#logoToggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  font-weight: 600;
+}
+
+/* panel */
+.logo-panel {
+  margin-top: 10px;
+  background: #f7f7fb;
+  padding: 12px;
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(0,0,0,0.12);
+}
+
+/* grid */
+.logo-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+/* logo card */
+.logo-thumb {
+  background: #fff;
+  border: none;
+  padding: 14px;
+  border-radius: 14px;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.15);
+  transition: all 0.25s ease;
+  opacity: 0.75;
+}
+
+/* logo image */
+.logo-thumb img {
+  width: 100%;
+  height: 46px;
+  object-fit: contain;
+  pointer-events: none;
+  transition: transform 0.3s ease;
+}
+
+/* 🔥 STRONG HOVER ZOOM */
+.logo-thumb:hover {
+  opacity: 1;
+  transform: scale(1.12);
+  box-shadow: 0 14px 32px rgba(76,201,240,0.55);
+}
+
+.logo-thumb:hover img {
+  transform: scale(1.2);
+}
+
+/* selected */
+.logo-thumb.active {
+  opacity: 1;
+  box-shadow: 0 0 0 3px #4cc9f0,
+              0 14px 32px rgba(76,201,240,0.6);
+}
+
+
+
+
     
   </style>
 </head>
@@ -967,15 +1043,31 @@
     </div>
 
 
-	<!-- =======================
-     LOGO SELECT (ADD HERE)
-     ======================= -->
-<div class="control-group">
-  <label for="logoDropdown"><b style = "Color:#fff;">Select Logo</b></label>
-  <select id="logoDropdown">
-    <option value="">-- Select Logo --</option>
-  </select>
+<div class="section" id="logoSection">
+  <h3><button id="logoToggle" class="ghost" type="button">
+     🏷️ Logos ▸
+  </button></h3>
+
+  <div id="logoPanel" class="logo-panel" hidden>
+    <div class="logo-grid">
+
+      <button class="logo-thumb" data-logo="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/4.png">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/4.png">
+      </button>
+
+      <button class="logo-thumb" data-logo="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/8.png">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/8.png">
+      </button>
+
+      <button class="logo-thumb" data-logo="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/18.png">
+        <img src="https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/18.png">
+      </button>
+
+    </div>
+  </div>
 </div>
+
+
 
 
 
@@ -1008,11 +1100,11 @@
       <div class="row">
         <div class="full">
           <label>Event Name
-		  <button id="toggleEventName" type="button" title="Show / Hide Event Name">👁</button>
-		  </label>
-		  
+      <button id="toggleEventName" type="button" title="Show / Hide Event Name">👁</button>
+      </label>
+      
 
-		  
+      
           <input type="text" id="eventName" placeholder="Enter Event Name" />
         </div>
         <div>
@@ -1048,11 +1140,11 @@
       <div class="row">
         <div class="full">
           <label>Branch Name
-		  <button id="toggleBranchName" type="button" title="Show / Hide Branch Name">👁</button>
-		  </label>
+      <button id="toggleBranchName" type="button" title="Show / Hide Branch Name">👁</button>
+      </label>
           <input type="text" id="branchName" placeholder="Enter Branch Name" />
-		   
-		  
+       
+      
         </div>
         <div>
           <label>Branch Color</label>
@@ -1389,8 +1481,8 @@
         <div class="row">
           <button class="primary" id="downloadBtn">Download Poster</button>
           <button class="ghost" id="shuffleBtn">Shuffle Layout</button>
-		<button class="danger"  id="resetBtn">Reset Poster</button>
-		<button class="danger" id="shareWhatsappBtn" 
+    <button class="danger"  id="resetBtn">Reset Poster</button>
+    <button class="danger" id="shareWhatsappBtn" 
         style="display:flex;align-items:center;gap:8px;">
 
   <!-- WhatsApp SVG Icon (No external link!) -->
@@ -1649,7 +1741,7 @@
     /* ================== STATE ================== */
     let cropper = null,
       currentEditingIndex = -1;
-	  let isResizing = false;
+    let isResizing = false;
     const poster = document.getElementById('poster');
 
     // Replace your existing addImageStickerFromUrl with this version.
@@ -4726,51 +4818,10 @@ toggleBranchBtn && toggleBranchBtn.addEventListener("click", () => {
   toggleVisibility(branchEl, toggleBranchBtn);
 });
 
-	
-	//custom logo script
-	
-	document.addEventListener("DOMContentLoaded", function () {
+  
 
-  const logos = [
-    {
-      name: "Sri Chaitanya Collage Logo",
-      src: "https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/1.png"
-    },
-    {
-      name: "Infinity Learn",
-      src: "https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/4.png"
-    },
-    {
-      name: "E Techno Schools",
-      src: "https://raw.githubusercontent.com/postermakingsoftware/pms/refs/heads/main/1.png"
-    }
-  ];
-
-  const dropdown = document.getElementById("logoDropdown");
-  const posterLogo = document.getElementById("logo"); // ✅ correct target
-
-  if (!dropdown || !posterLogo) {
-    console.warn("logoDropdown or #logo not found");
-    return;
-  }
-
-  /* populate dropdown */
-  logos.forEach((l, i) => {
-    const opt = document.createElement("option");
-    opt.value = i;
-    opt.textContent = l.name;
-    dropdown.appendChild(opt);
-  });
-
-  /* replace poster logo only */
-  dropdown.addEventListener("change", function () {
-    if (this.value === "") return;
-    posterLogo.src = logos[this.value].src;
-  });
-
-});
-	
-	
+  
+  
 document.getElementById("shareWhatsappBtn").addEventListener("click", async () => {
 
   const poster = document.getElementById("poster");
@@ -4873,8 +4924,8 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
 });
 
 
-	
-	
+  
+  
 </script>
 
 <script>
@@ -5014,8 +5065,79 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
   });
 
 })();
+
+
+
+
+
+
+
+
+
+
+
 </script>
 
+
+
+<script>
+/* ===============================
+   LOGO FOLDER – FINAL FIX
+   =============================== */
+
+const logoToggle = document.getElementById("logoToggle");
+const logoPanel  = document.getElementById("logoPanel");
+const logoArrow  = document.getElementById("logoArrow");
+
+if (logoToggle && logoPanel) {
+
+  // toggle open / close
+  logoToggle.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const isOpen = !logoPanel.hasAttribute("hidden");
+    logoPanel.toggleAttribute("hidden", isOpen);
+    if (logoArrow) logoArrow.textContent = isOpen ? "▾" : "▴";
+  });
+
+  // click outside → close
+  document.addEventListener("click", (e) => {
+    if (
+      !logoPanel.hasAttribute("hidden") &&
+      !e.target.closest("#logoSection")
+    ) {
+      logoPanel.setAttribute("hidden", "");
+      if (logoArrow) logoArrow.textContent = "▾";
+    }
+  });
+
+  // ESC → close
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") {
+      logoPanel.setAttribute("hidden", "");
+      if (logoArrow) logoArrow.textContent = "▾";
+    }
+  });
+}
+
+/* ===============================
+   LOGO SELECT
+   =============================== */
+document.querySelectorAll(".logo-thumb").forEach(btn => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+
+    document
+      .querySelectorAll(".logo-thumb")
+      .forEach(b => b.classList.remove("active"));
+
+    btn.classList.add("active");
+
+    const src = btn.dataset.logo;
+    const logoImg = document.getElementById("logo");
+    if (logoImg && src) logoImg.src = src;
+  });
+});
+</script>
 
 
 
@@ -5027,5 +5149,4 @@ document.getElementById("shareWhatsappBtn").addEventListener("click", async () =
 </body>
 
 </html>
-
 
