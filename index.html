@@ -202,6 +202,9 @@
       position: relative;
       touch-action: none;
       /* improves drag on mobile */
+   background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
    
     }
 
@@ -1337,6 +1340,35 @@
       <!-- 🌈 Background -->
       <div class="section">
         <h3>🌈 Background</h3>
+
+    	<hr style="border:none;border-top:1px solid #eee;margin:10px 0">
+
+<div class="row full">
+  <label><b>Background Image</b></label>
+  <input type="file" id="bgImageInput" accept="image/*">
+</div>
+
+<div class="row">
+  <div>
+    <label>Image Fit</label>
+<select id="bgImageFit">
+  <option value="cover">Fill Poster (Best)</option>
+  <option value="contain">Show Full Image</option>
+  <option value="100% 100%">Stretch to Fit</option>
+</select>
+
+  </div>
+
+
+  <div style="display:flex;align-items:end">
+    <button class="danger" id="removeBgImageBtn">Remove Image</button>
+  </div>
+</div>
+
+
+
+
+        
         <div class="row">
           <div>
             <label>Solid</label>
@@ -5147,6 +5179,57 @@ document.querySelectorAll(".logo-thumb").forEach(btn => {
     if (logoImg && src) logoImg.src = src;
   });
 });
+
+
+/* =========================================================
+   BACKGROUND IMAGE – SAFE BOTTOM SCRIPT
+   (Does NOT disturb existing background / gradient code)
+   ========================================================= */
+
+(function () {
+  const poster = document.getElementById("poster");
+  const bgColorPicker = document.getElementById("bgColorPicker");
+
+  const bgImageInput = document.getElementById("bgImageInput");
+  const bgImageFit = document.getElementById("bgImageFit");
+  const removeBgImageBtn = document.getElementById("removeBgImageBtn");
+
+  if (!poster || !bgImageInput) return;
+
+  // Upload background image
+  bgImageInput.addEventListener("change", function () {
+    const file = this.files[0];
+    if (!file || !file.type.startsWith("image/")) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      poster.style.backgroundImage = `url(${e.target.result})`;
+      poster.style.backgroundRepeat = "no-repeat";
+      poster.style.backgroundPosition = "center";
+      poster.style.backgroundSize = bgImageFit ? bgImageFit.value : "cover";
+    };
+    reader.readAsDataURL(file);
+  });
+
+  // Change fit
+  bgImageFit &&
+    bgImageFit.addEventListener("change", function () {
+      if (poster.style.backgroundImage) {
+        poster.style.backgroundSize = this.value;
+      }
+    });
+
+  // Remove background image (fallback to color)
+  removeBgImageBtn &&
+    removeBgImageBtn.addEventListener("click", function () {
+      poster.style.backgroundImage = "none";
+      if (bgColorPicker) {
+        poster.style.background = bgColorPicker.value;
+      }
+      bgImageInput.value = "";
+    });
+})();
+  
 </script>
 
 
@@ -5159,4 +5242,5 @@ document.querySelectorAll(".logo-thumb").forEach(btn => {
 </body>
 
 </html>
+
 
